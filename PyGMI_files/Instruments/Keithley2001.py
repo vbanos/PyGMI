@@ -9,28 +9,33 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 #TODO channel option
 
+#TODO filter (gia to AC mono)
+# οταν μετράς σε χαμηλές συχνότητες να κόβει κάποιες πάνω από ένα όριο
+# FILTER ON / OFF
+
 class Connect_Instrument():
+    """Potential values are: AC, DC.
+    """
+    instr_mode = 'AC'
+    
     def __init__(self, VISA_address="GPIB0::16"):
         self.io = visa.instrument(VISA_address)
         logging.info("Init instrument %s", self.io.ask("*IDN?"))
         
     def initialize(self):
         """commands executed when the instrument is initialized"""
-        logging.info("initialize")
-        #print(self.reset_and_query_voltage())
-        #self.io.write(':SYSTem:LSYNc:STATe ON')
-        #self.set_integration_rate(3)
-        #self.setup_single_shot_Tlink()
+        self.io.write("*CLS")
+        logging.info("CLS* => Clear all registers and logs")
         
 
-    def reset_autozero(self,duration=1):
-        """
+    def reset_autozero(self, duration=1):
+        self.io.write("*CLS")
         self.io.write(':SYSTem:AZERo:STATe ON')
         self.io.write(':syst:faz ON')
         time.sleep(duration)
         self.io.write(':syst:faz off')
         self.io.write(':SYSTem:AZERo:STATe OFF')
-        """
+        logging.info("reset autozero")
 
     def setup_single_shot(self,verbose=False):
         """
@@ -119,19 +124,45 @@ but has the advantage of making sure that it does not return the same reading tw
         return float(self.io.ask(':sens:data:fresh?'))
 
     def query_current_source_amplitude(self):
-        logging.info("query_current_source_amplitude")
-        logging.info(self.io.ask(":READ?"))
-        return 1.0
+        """Make 10 measurements of current and return average.
+        """        
+        if self.instr_mode == "DC":
+            self.io.write(":conf:volt:dc")
+            self.io.write(":curr:dc:nplc 10")
+        elif self.instr_mode == "AC":
+            self.io.write(":conf:volt:ac")
+            self.io.write(":curr:ac:nplc 10")
+        result = self.io.ask(":read?")
+        logging.info(result)
+        if result:
+            return float(result.split(",")[0].replace("NVDC", "").replace("NVAC", ""))
+        else:
+            return 0.0
 
     def query_voltage_compliance(self):
-        logging.info("query_current_source_amplitude")
-        logging.info(self.io.ask(":READ?"))
-        return 5.0
-    
-    def set_measurement_mode(self, value):
-        """Value can be: DCV, ACV, DCI, ACI.
+        """Make 10 measurements of voltage and return average.
         """
-        print("TODO SET measurement_mode", value)
+        if self.instr_mode == "DC":
+            self.io.write(":conf:volt:dc")
+            self.io.write(":volt:dc:nplc 10")
+        elif self.instr_mode == "AC":
+            self.io.write(":conf:volt:ac")
+            self.io.write(":volt:ac:nplc 10")
+        result = self.io.ask(":read?")
+        logging.info(result)
+        if result:
+            return float(result.split(",")[0].replace("NVDC", "").replace("NVAC", ""))
+        else:
+            return 0.0
+    
+    def set_measurement_mode(self, mode):
+        """Value can be: AC, DC.
+        """
+        self.instr_mode = mode
+        #
+        #self.io.write(":VOLT:DC:RANG:AUTO ON")
+        #self.io.write(":CURR:DC:RANG:AUTO ON")
+        logging.info("Set measurement mode to %s", mode)
         
     def set_voltage_compliance(self, value):
         print("TODO SET voltage_compliance", value)
@@ -139,9 +170,6 @@ but has the advantage of making sure that it does not return the same reading tw
     def set_current_source_amplitude(self, value):
         print("TODO SET current_source_amplitude", value)
     
-    def query_output_ON(self):
-        logging.info("query_output_ON")
-        return True
 #:MEASure:<function>?
 #Parameters
 #<function> = VOLTage[:DC] Voltage
@@ -167,25 +195,11 @@ but has the advantage of making sure that it does not return the same reading tw
         self.io.write(':SENS:CHAN '+str(chan))
 
 #Select channel to measure; 0, 1 or 2 (0 = internal temperature sensor).
-
-    def output_terminals(self,side):
-        if side=='rear':
-            self.io.write(':ROUT:TERM REAR')
-        elif side=='front':
-            self.io.write(':ROUT:TERM FRON')
     
 #:ROUTe:TERMinals <name> Select front or rear panel in/out jacks
 #Parameters <name> = FRONt Front panel in/out jacks
 #REAR Rear panel in/out jacks
 #Query :TERMinals? Query state of front/rear switch setting
-
-    def output_ON(self):
-        self.io.write(':OUTP 1')
-    
-    def output_OFF(self):
-        self.io.write(':OUTP 0')
-        
-#Enable or disable analog output (OFF forces 0V).
 
     def current_source_range(self,RANGe):
         self.io.write(':SOUR:CURR:RANG '+str(RANGe))

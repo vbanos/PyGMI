@@ -36,10 +36,8 @@ class Panel(QWidget):
             with self.reserved_access_to_instr:
                 I=self.instr.query_current_source_amplitude()
                 Vcomp=self.instr.query_voltage_compliance()
-                outstate=self.instr.query_output_ON()
             self.ui.I_disp.setText(str(I*1e6)+u' μA')
             self.ui.V_disp.setText(str(Vcomp)+' V')
-            self.ui.outputON.setChecked(outstate)
             self.monitor_timer.start(self.ui.refresh_rate.value()*1000)
         
     
@@ -56,13 +54,12 @@ class Panel(QWidget):
             self.instr.set_voltage_compliance(value)                
 
     def change_measurement_mode(self, value=0):
-        """0 = DCV
-           1 = ACV
-           2 = DCI
-           3 = ACI
+        """0 = AC
+           1 = DC
         """
         with self.reserved_access_to_instr:
-            mmode = {0: "DCV", 1: "ACV", 2: "DCI", 3: "ACI"}
+            print("CHANGE MEASUREMENT MODE", value)
+            mmode = {0: "AC", 1: "DC"}
             self.instr.set_measurement_mode(mmode[value])
 
     def switch_output(self,value=False):

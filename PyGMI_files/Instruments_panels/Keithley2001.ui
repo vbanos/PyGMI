@@ -6,14 +6,28 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>588</width>
-    <height>120</height>
+    <width>634</width>
+    <height>116</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Keithley 2001</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="1">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Scaling options</string>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="3">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Measurement Mode</string>
+     </property>
+    </widget>
+   </item>
    <item row="1" column="0">
     <widget class="QLabel" name="I_disp">
      <property name="minimumSize">
@@ -25,6 +39,7 @@
      <property name="font">
       <font>
        <family>Courier</family>
+       <pointsize>16</pointsize>
        <weight>75</weight>
        <bold>true</bold>
        <kerning>true</kerning>
@@ -79,23 +94,6 @@ color: rgb(250, 28, 51);</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="2">
-    <widget class="QRadioButton" name="outputON">
-     <property name="text">
-      <string>Output ON</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="3">
-    <widget class="QLabel" name="label_47">
-     <property name="text">
-      <string>Refresh rate</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-   </item>
    <item row="1" column="4">
     <widget class="QCheckBox" name="monitor">
      <property name="text">
@@ -106,11 +104,12 @@ color: rgb(250, 28, 51);</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="0">
+   <item row="4" column="0">
     <widget class="QLabel" name="V_disp">
      <property name="font">
       <font>
        <family>Courier</family>
+       <pointsize>16</pointsize>
        <weight>75</weight>
        <bold>true</bold>
        <kerning>true</kerning>
@@ -143,7 +142,7 @@ color: rgb(250, 28, 51);</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
+   <item row="4" column="1">
     <widget class="QDoubleSpinBox" name="doubleSpinBox_2">
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -168,14 +167,28 @@ color: rgb(250, 28, 51);</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="2">
-    <widget class="QPushButton" name="resetbutton">
+   <item row="1" column="3">
+    <widget class="QComboBox" name="measurementMode">
+     <item>
+      <property name="text">
+       <string>AC</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>DC</string>
+      </property>
+     </item>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLabel" name="label">
      <property name="text">
-      <string>Reset</string>
+      <string>Measurements</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="3" colspan="2">
+   <item row="4" column="3">
     <widget class="QDoubleSpinBox" name="refresh_rate">
      <property name="minimumSize">
       <size>
@@ -203,41 +216,20 @@ color: rgb(250, 28, 51);</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QLabel" name="label">
+   <item row="2" column="3">
+    <widget class="QLabel" name="label_47">
      <property name="text">
-      <string>Measurements</string>
+      <string>Refresh rate</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
      </property>
     </widget>
    </item>
-   <item row="3" column="1">
-    <widget class="QComboBox" name="measurementMode">
-     <item>
-      <property name="text">
-       <string>DCV</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>ACV</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>DCI</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>ACI</string>
-      </property>
-     </item>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QLabel" name="label_2">
+   <item row="4" column="4">
+    <widget class="QPushButton" name="resetbutton">
      <property name="text">
-      <string>Options</string>
+      <string>Reset</string>
      </property>
     </widget>
    </item>
@@ -306,22 +298,6 @@ color: rgb(250, 28, 51);</string>
     <hint type="destinationlabel">
      <x>279</x>
      <y>82</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>outputON</sender>
-   <signal>clicked(bool)</signal>
-   <receiver>Panel</receiver>
-   <slot>switch_output()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>244</x>
-     <y>18</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>290</x>
-     <y>23</y>
     </hint>
    </hints>
   </connection>
