@@ -209,3 +209,18 @@ but has the advantage of making sure that it does not return the same reading tw
 
     def set_sensitivity(self,RANGE):
         self.io.write(':SENS:VOLT:RANG '+str(RANGE))
+        
+    def enable_filter(self):
+        if self.instr_mode == "DC":
+            self.io.write(":SENS:VOLT:DC:AVER:STAT 1")
+        elif self.instr_mode == "AC":
+            self.io.write(":SENS:VOLT:AC:AVER:STAT 1")
+        logging.info("ENABLE FILTER")
+            
+    def disable_filter(self):
+        if self.instr_mode == "DC":
+            self.io.write(":SENS:VOLT:DC:AVER:STAT 0")
+        elif self.instr_mode == "AC":
+            self.io.write(":SENS:VOLT:AC:AVER:STAT 0")
+        logging.info("DISABLE FILTER")
+        

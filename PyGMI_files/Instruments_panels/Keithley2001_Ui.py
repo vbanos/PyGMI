@@ -52,6 +52,11 @@ class Ui_Panel(object):
         self.monitor.setObjectName("monitor")
         self.gridLayout.addWidget(self.monitor, 1, 4, 1, 1)
         self.V_disp = QtGui.QLabel(Panel)
+        
+        self.filter = QtGui.QCheckBox(Panel)
+        self.filter.setObjectName("filter")
+        self.gridLayout.addWidget(self.filter, 2,4,2,2)
+        
         font = QtGui.QFont()
         font.setFamily("Courier")
         font.setPointSize(16)
@@ -67,6 +72,7 @@ class Ui_Panel(object):
         self.V_disp.setAlignment(QtCore.Qt.AlignCenter)
         self.V_disp.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         self.V_disp.setObjectName("V_disp")
+             
         self.gridLayout.addWidget(self.V_disp, 4, 0, 1, 1)
         self.doubleSpinBox_2 = QtGui.QDoubleSpinBox(Panel)
         self.doubleSpinBox_2.setAlignment(QtCore.Qt.AlignCenter)
@@ -104,6 +110,7 @@ class Ui_Panel(object):
 
         self.retranslateUi(Panel)
         QtCore.QObject.connect(self.monitor, QtCore.SIGNAL("clicked(bool)"), Panel.monitor)
+        QtCore.QObject.connect(self.filter, QtCore.SIGNAL("clicked(bool)"), Panel.filter)
         QtCore.QObject.connect(self.refresh_rate, QtCore.SIGNAL("valueChanged(double)"), Panel.update_timer_timeout)
         QtCore.QObject.connect(self.doubleSpinBox, QtCore.SIGNAL("valueChanged(double)"), Panel.change_I)
         QtCore.QObject.connect(self.doubleSpinBox_2, QtCore.SIGNAL("valueChanged(double)"), Panel.change_V_comp)
@@ -118,6 +125,7 @@ class Ui_Panel(object):
         self.I_disp.setText(QtGui.QApplication.translate("Panel", "-------- μA", None, QtGui.QApplication.UnicodeUTF8))
         self.doubleSpinBox.setSuffix(QtGui.QApplication.translate("Panel", " μA", None, QtGui.QApplication.UnicodeUTF8))
         self.monitor.setText(QtGui.QApplication.translate("Panel", "Monitor", None, QtGui.QApplication.UnicodeUTF8))
+        self.filter.setText(QtGui.QApplication.translate("Panel", "Filter", None, QtGui.QApplication.UnicodeUTF8))
         self.V_disp.setText(QtGui.QApplication.translate("Panel", "-------- V", None, QtGui.QApplication.UnicodeUTF8))
         self.doubleSpinBox_2.setSuffix(QtGui.QApplication.translate("Panel", " V", None, QtGui.QApplication.UnicodeUTF8))
         self.measurementMode.setItemText(0, QtGui.QApplication.translate("Panel", "AC", None, QtGui.QApplication.UnicodeUTF8))

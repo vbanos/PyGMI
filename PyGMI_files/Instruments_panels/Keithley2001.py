@@ -29,7 +29,7 @@ class Panel(QWidget):
         #if self.ui.monitor.isChecked():self.monitor()
     
 
-    def monitor(self,state=1):
+    def monitor(self, state=1):
         if state!=1:
             self.monitor_timer.stop()
         elif state and not(self.monitor_timer.isActive()):
@@ -39,7 +39,12 @@ class Panel(QWidget):
             self.ui.I_disp.setText(str(I*1e6)+u' μA')
             self.ui.V_disp.setText(str(Vcomp)+' V')
             self.monitor_timer.start(self.ui.refresh_rate.value()*1000)
-        
+    
+    def filter(self, state=1):
+        if state == 1:
+            self.instr.enable_filter()
+        else:
+            self.instr.disable_filter()
     
     def update_timer_timeout(self,secs):
         #The value must be converted to milliseconds            
