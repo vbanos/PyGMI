@@ -58,7 +58,6 @@ class Panel(QWidget):
            1 = DC
         """
         with self.reserved_access_to_instr:
-            print("CHANGE MEASUREMENT MODE", value)
             mmode = {0: "AC", 1: "DC"}
             self.instr.set_measurement_mode(mmode[value])
 

@@ -26,7 +26,7 @@ class Connect_Instrument():
         """commands executed when the instrument is initialized"""
         self.io.write("*CLS")
         logging.info("CLS* => Clear all registers and logs")
-        
+        self.set_measurement_mode("AC")
 
     def reset_autozero(self, duration=1):
         self.io.write("*CLS")
@@ -127,10 +127,8 @@ but has the advantage of making sure that it does not return the same reading tw
         """Make 10 measurements of current and return average.
         """        
         if self.instr_mode == "DC":
-            self.io.write(":conf:volt:dc")
             self.io.write(":curr:dc:nplc 10")
         elif self.instr_mode == "AC":
-            self.io.write(":conf:volt:ac")
             self.io.write(":curr:ac:nplc 10")
         result = self.io.ask(":read?")
         logging.info(result)
@@ -143,10 +141,8 @@ but has the advantage of making sure that it does not return the same reading tw
         """Make 10 measurements of voltage and return average.
         """
         if self.instr_mode == "DC":
-            self.io.write(":conf:volt:dc")
             self.io.write(":volt:dc:nplc 10")
         elif self.instr_mode == "AC":
-            self.io.write(":conf:volt:ac")
             self.io.write(":volt:ac:nplc 10")
         result = self.io.ask(":read?")
         logging.info(result)
@@ -159,9 +155,10 @@ but has the advantage of making sure that it does not return the same reading tw
         """Value can be: AC, DC.
         """
         self.instr_mode = mode
-        #
-        #self.io.write(":VOLT:DC:RANG:AUTO ON")
-        #self.io.write(":CURR:DC:RANG:AUTO ON")
+        if mode == "DC":
+            self.io.write(":conf:volt:dc")
+        elif mode == "AC":
+            self.io.write(":conf:volt:ac")
         logging.info("Set measurement mode to %s", mode)
         
     def set_voltage_compliance(self, value):
