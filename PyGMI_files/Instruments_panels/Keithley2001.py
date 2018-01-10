@@ -66,6 +66,17 @@ class Panel(QWidget):
             mmode = {0: "AC", 1: "DC"}
             self.instr.set_measurement_mode(mmode[value])
 
+    def change_v_range(self, value):
+        with self.reserved_access_to_instr:
+            mmode = {0: "OFF", 1: "AUTO", 2: "0.2", 3: "2", 4: "20", 5: "200", 6: "750"}
+            self.instr.set_v_range(mmode[value])
+    
+    def change_i_range(self, value):
+        # 200μΑ, 2mA, 20mA, 200mA, 2A
+        with self.reserved_access_to_instr:
+            mmode = {0: "OFF", 1: "AUTO", 2: "0.0002", 3: "0.002", 4: "0.020", 5: "0.2", 6: "2"}
+            self.instr.set_i_range(mmode[value])
+
     def switch_output(self,value=False):
         if value:                
             with self.reserved_access_to_instr:
