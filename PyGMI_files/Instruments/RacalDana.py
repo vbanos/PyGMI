@@ -13,20 +13,34 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 # οταν μετράς σε χαμηλές συχνότητες να κόβει κάποιες πάνω από ένα όριο
 # FILTER ON / OFF
 
+
+
 class Connect_Instrument():
     """Potential values are: AC, DC.
     """
     instr_mode = 'AC'
     
     def __init__(self, VISA_address="GPIB0::16"):
-        self.io = visa.instrument(VISA_address)
-        logging.info("Init instrument %s", self.io.ask("*IDN?"))
+        self.io = visa.instrument(VISA_address, term_chars = "\r\n")
+        logging.info("Init instrument Racal-Dana")
+ 
         
     def initialize(self):
         """commands executed when the instrument is initialized"""
-        self.io.write("*CLS")
-        logging.info("CLS* => Clear all registers and logs")
-        self.set_measurement_mode("AC")
+        logging.info("initialise")
+        print(self.read())        
+        
+    def read(self):
+        """Return float
+        """
+        result = self.io.read()      
+        logging.info(result)
+        if result:
+            return float(result.replace("FA+", ""))
+        else:
+            return 0.0
+
+
 
     def reset_autozero(self, duration=1):
         self.io.write("*CLS")
@@ -151,16 +165,7 @@ but has the advantage of making sure that it does not return the same reading tw
         else:
             return 0.0
     
-    def set_measurement_mode(self, mode):
-        """Value can be: AC, DC.
-        """
-        self.instr_mode = mode
-        if mode == "DC":
-            self.io.write(":conf:volt:dc")
-        elif mode == "AC":
-            self.io.write(":conf:volt:ac")
-        logging.info("Set measurement mode to %s", mode)
-        
+            
     def set_voltage_compliance(self, value):
         print("TODO SET voltage_compliance", value)
     
