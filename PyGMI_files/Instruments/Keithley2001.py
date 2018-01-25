@@ -27,6 +27,8 @@ class Connect_Instrument():
         self.io.write("*CLS")
         logging.info("CLS* => Clear all registers and logs")
         self.set_measurement_mode("AC")
+        self.open_channel(2)
+        print(self.query_voltage_average())
 
     def reset_autozero(self, duration=1):
         self.io.write("*CLS")
@@ -137,6 +139,9 @@ but has the advantage of making sure that it does not return the same reading tw
         else:
             return 0.0
 
+    def query_voltage_average(self):
+        return self.query_voltage_compliance()
+
     def query_voltage_compliance(self):
         """Make 10 measurements of voltage and return average.
         """
@@ -150,6 +155,14 @@ but has the advantage of making sure that it does not return the same reading tw
             return float(result.split(",")[0].replace("NVDC", "").replace("NVAC", ""))
         else:
             return 0.0
+    
+    def open_channel(self, channel):
+        """Set channel to use for measurement.
+        """
+        self.io.write(":ROUT:OPEN %d" % channel)
+    
+    def close_channel(self, channel):
+        self.io.write(":ROUT:CLOS %d" % channel)
     
     def set_measurement_mode(self, mode):
         """Value can be: AC, DC.
