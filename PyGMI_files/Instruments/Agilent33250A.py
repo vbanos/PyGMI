@@ -19,6 +19,19 @@ class Connect_Instrument():
         """commands executed when the instrument is initialized"""
         self.io.write("*CLS")
         logging.info("CLS* => Clear all registers and logs")
-        #self.set_measurement_mode("AC")
-
+        self._zero_output()       
+    
+    def _zero_output(self):
+        """Frequency 1000, Amplitude 0, volt offset 0
+        Volts unit is VPP (Volt Peak to Peak)
+        """
+        logging.info("Ensure function generator provides zero output")
+        self.io.write("APPL:SIN 1.0E+3, 0.0")
+        
+        """REM set function generator output to 6V p-p, attenuator to first estimate"""
+        # devicefreq = 1000 TODO ASKS YIANNIS ??
+        self.io.write("APPL:SIN 1.0E+3, 6.0")
+        
+        
+        
         
