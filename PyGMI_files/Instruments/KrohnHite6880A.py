@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
+import time
 import visa
 
 # set logging output to stdout
@@ -11,7 +12,7 @@ class Connect_Instrument():
     
     def __init__(self, VISA_address="GPIB0::4"):
         self.io = visa.instrument(VISA_address)
-        logging.info("Init instrument Bruel & Kjaer 2636")
+        logging.info("Init instrument Krohn-Hite 6880A")
          
     def initialize(self):
         """commands executed when the instrument is initialized.
@@ -22,7 +23,15 @@ class Connect_Instrument():
         REM setup bk2636 detector (device, 0%=linear scale, 8%=Fast, 0%=Normal o/p, 0%=Fast Pk Decay, 0%=5dB Pk rise)
         """
         logging.info("initialise - configure instrument Krohn-Hite 6880A")
-        logging.info("read value %f", self.read())
     
     def read(self):
         return float(self.io.read())
+    
+    def read_average(self, times=1, delay=0.0):
+        """Read N times with a delay interval. Return mean value.
+        """
+        results = []
+        for _ in range(times):
+            results.append(self.read())
+            time.sleep(delay)
+        return float(sum(results) / len(results))

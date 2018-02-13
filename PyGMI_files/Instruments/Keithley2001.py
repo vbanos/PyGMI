@@ -3,6 +3,7 @@ import logging
 import sys
 import time
 import visa
+from PyGMI_files import measurements_done_alert
 
 # set logging output to stdout
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -12,6 +13,11 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 #TODO filter (gia to AC mono)
 # οταν μετράς σε χαμηλές συχνότητες να κόβει κάποιες πάνω από ένα όριο
 # FILTER ON / OFF
+
+def parse_float(input):
+    """Utility method to parse instrument output and return float value.
+    """
+    return float(input.split(",")[0].replace("NVDC", "").replace("NVAC", ""))
 
 class Connect_Instrument():
     """Potential values are: AC, DC.
@@ -38,6 +44,31 @@ class Connect_Instrument():
         self.io.write(':syst:faz off')
         self.io.write(':SYSTem:AZERo:STATe OFF')
         logging.info("reset autozero")
+
+    def list_channels(self):
+        # not used anywhere
+        internal = self.io.ask(":ROUT:SCAN:INT?")
+        external = self.io.ask(":ROUT:SCAN:EXT?")
+        
+    def scan_channel(self, channel, measurement, times=1, interval=0.1):
+        """Scan channel for requirement measurement and return list of float
+        values.
+        :param channel: integer, 1 to 10
+        :param measurement: string, e.g. 'volt:dc'
+        :param times: integer, how many times it will measure
+        :param delay: float, delay between each measurement
+        """
+        self.io.write(":rout:SCAN:LSEL INT")
+        self.io.write(":rout:CLOSE (@%d)" % channel)
+        self.io.write(":rout:open (@%d)" % channel) 
+        self.io.write(":rout:scan:int:func (@%d), '%s'" % (channel, measurement))
+        self.io.write(":rout:scan:int (@%d)" % channel)
+        out = []
+        for i in range(0, times):
+            out.append(parse_float(self.io.ask(":READ?")))
+            time.sleep(interval)
+        self.io.write(":rout:CLOSE (@%d)" % channel)
+        return out
 
     def setup_single_shot(self,verbose=False):
         """
@@ -159,7 +190,7 @@ but has the advantage of making sure that it does not return the same reading tw
     def open_channel(self, channel):
         """Set channel to use for measurement.
         """
-        self.io.write(":ROUT:OPEN %d" % channel)
+        self.io.write(":ROUT:OPEN:SCAN:INT:FUNC 5 VOLT:DC")
     
     def close_channel(self, channel):
         self.io.write(":ROUT:CLOS %d" % channel)
