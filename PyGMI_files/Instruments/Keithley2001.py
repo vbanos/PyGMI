@@ -58,6 +58,8 @@ class Connect_Instrument():
         :param times: integer, how many times it will measure
         :param delay: float, delay between each measurement
         """
+        logging.info("SCAN CHANNEL %d measurement %s times %d interval %g",
+                     channel, measurement, times, interval)
         self.io.write(":rout:SCAN:LSEL INT")
         self.io.write(":rout:CLOSE (@%d)" % channel)
         self.io.write(":rout:open (@%d)" % channel) 

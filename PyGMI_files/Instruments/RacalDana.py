@@ -37,7 +37,7 @@ class Connect_Instrument():
         result = self.io.ask("")
         return float(result.replace("FA+", ""))
     
-    def read_average(self, times=1, delay=0.0)
+    def read_average(self, times=1, delay=0.0):
         """Read N times with a delay interval. Return mean value.
         """
         results = []
