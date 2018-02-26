@@ -7,25 +7,20 @@ import visa
 # set logging output to stdout
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
-#TODO channel option
 
-#TODO filter (gia to AC mono)
-# οταν μετράς σε χαμηλές συχνότητες να κόβει κάποιες πάνω από ένα όριο
-# FILTER ON / OFF
-
-
+# WARNING Racal-Dana does not return anything if it does not get a signal.
+# If you do self.io.ask("RUT") it will return a string.
 
 class Connect_Instrument():
     """Potential values are: AC, DC.
-    """
-    instr_mode = 'AC'
-    
-    def __init__(self, VISA_address="GPIB0::16"):
+    """   
+    def __init__(self, VISA_address="GPIB0::14"):
         self.io = visa.instrument(VISA_address, term_chars = "\r\n")
         logging.info("Init instrument Racal-Dana")
         
     def initialize(self):
-        """commands executed when the instrument is initialized"""
+        """Commands executed when the instrument is initialized.
+        """
         pass
         
     def read(self):

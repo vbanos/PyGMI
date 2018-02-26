@@ -20,6 +20,7 @@ class Connect_Instrument():
         Each number corresponds to a char (ref EL100 manual tables).
         We write these chars to the device configure it.
         """
+        logging.info("SET EL100 VALUE %s", value_str)
         c1 = self._first_char(value_str[0])
         c2 = self._second_char(value_str[1])
         c3 = self._third_char(value_str[3])

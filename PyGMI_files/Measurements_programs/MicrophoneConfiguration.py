@@ -1,9 +1,13 @@
 import logging
+import math
 import pprint
 import threading
 import time
 from Tkinter import *
 import tkMessageBox
+
+#from microphone_uncertainties import attenuator_uncertainty
+
 
 class takeInput(object):
 
@@ -79,18 +83,25 @@ class Script(threading.Thread):
         SPL_standard = []
         SPL_device = []
         env_conditions = []
-                
+        
+        # TODO PROBLEM with gain setting in BK2636
+        # gain setting configured by mic sensitivity
+        # line 1235 in BAS file.
+        # TODO input gain + output gain        
         for i in range(5):           
             self.stop_switch_instrument("Reference Standard") 
             res = self.measure_SPL("Reference Standard")
             SPL_standard.append(res)
-            
             self.stop_switch_instrument("Customer Device")
             res = self.measure_SPL("Customer Device") 
-            SPL_device.append(res)               
+            SPL_device.append(res)
+            # TODO remove this 
+            break               
         
         pprint.pprint(SPL_standard)
-        pprint.pprint(SPL_device)                          
+        pprint.pprint(SPL_device)
+        
+        #self.calculate_uncertainties(SPL_standard, SPL_device, env_conditions)
     
     def measure_SPL(self, device_name):
         """"Big process that is repeated 5 times for working standard
@@ -104,36 +115,70 @@ class Script(threading.Thread):
         #t1 = 19 # getText("Current temperature?") # TODO input("Temperature?")
         #print(t1)
         #print("-----------------")
+        
+        self.agilent3350A.turn_off()
+        
         t1 = 20
         rh1 = 50.0 # TODO input("Humidity?")
-        p1 = 100.0  # TODO READ DPI141 
-        vpol1 = None
+        p1 = self.dpi141.read() 
+        vpol1 = self.keithley2001.scan_channel(4, "VOLT:DC")[0]
+        
+        self.check_temperature(t1)
+        self.check_humidity(rh1)
+        self.check_pressure(p1)
+        self.check_vpol(vpol1)
        
         # check Keithley2001 DC & CURR stability/fluctuation. 
         dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=20, interval=0.99)
         self._check_stability(dc_volt)
-        dc_curr = self.keithley2001.scan_channel(5, "VOLT:CURR", times=20, interval=0.99)
-        self._check_stability(dc_curr)                
+        
+        vmic = sum(dc_volt) / len(dc_volt)
         
         # Read total harmonic distortion from Krohn Hite.
         kh_avg = self.kh6880A.read_average(times=10, delay=1.99)
         logging.info("Kron Hite 6880A read %g", kh_avg)
-        print("Stop %s, press any key to continue..." % device_name)
-        wait()
+        wait("Stop %s, press any key to continue..." % device_name)
+        
         
         # start agilent3350A
         # the attenuator is adjusted until the voltage matches (to 0.005 db) the
         # output of the calibrator (VmicAmpl(ch5) - VinsertAmpl(ch5))           
         self.agilent3350A.turn_on()
-        #for val in range(90.00, 80.00, -0.5):
-        #    attenuator_str = "%.2f" % val
-        #    self.el100.set(attenuator_str)
+        # FIRST agilent gives 6V peak to peak, freq 1000Hz, SINE waveform
+        
+        # Vdev = Vmic
+        # Vsys = Vins
+        
+        # atten#=100.0# - micsensitivity# - nomlevel#
+        # micsensivity input variable by user (certificate). e.g. value -26.49
+        # nomlevel = 94
+        # 100 - (-26.49) - 94 = 32.49
+        atten = 100.0 - (-26.49) - 94
+        good_consec = 0 
+        while good_consec < 2:
+            print(atten)
+            attenuator_str = "%.2f" % atten
+            self.el100.set(attenuator_str)
+            vins = self.keithley2001.scan_channel(5, "VOLT:DC")[0]
+            print("vmic", vmic)
+            print("vins", vins)         
+            print("------------------------")   
+            # convert to dB
+            attenerror = abs(20.0 * math.log10(vmic / vins))
+            if attenerror <= 0.005:
+                good_consec += 1
+                print("SUCCESS", attenerror)
+            else:
+                print("ERROR", attenerror)
+                atten -= attenerror
+                time.sleep(5)
         
         # measure Vins voltage (ch3) keythley
         dc_volt = self.keithley2001.scan_channel(3, "VOLT:DC", times=20, interval=0.99)
         print(dc_volt)
         #logging.info("Keithley DC VOLT %g", dc_volt)
         rd_avg = self.racaldana.read_average(times=20, delay=1.99)
+        # rd_avg = 1
         logging.info("Racal Dana read %g", rd_avg)
         # distortion value (kh6880A)
         kh_avg2 = self.kh6880A.read_average(times=10, delay=1.99)      
@@ -142,8 +187,13 @@ class Script(threading.Thread):
         # final env conditions 
         t2 = 20.5     # float(input("Temperature?"))
         rh2 = 45.0    # float(input("Humidity?"))
-        p2 = float(self.dpi)
-        vpol2 = None
+        p2 = self.dpi141.read()
+        vpol2 = self.keithley2001.scan_channel(4, "VOLT:DC")[0]
+        
+        self.check_temperature(t2)
+        self.check_humidity(rh2)
+        self.check_pressure(p2)
+        self.check_vpol(vpol2)
         
         env = dict(t=(t1+t2)/2.0,
                    rh=(rh1+rh2)/2.0,
@@ -173,3 +223,44 @@ class Script(threading.Thread):
             logging.error("Fatal problem with measurement stability.")
             logging.error(values)
             sys.exit(0)
+        # TODO return and save stability (fluctuation)
+            
+    def check_temperature(self, temp):
+        if not 20.0 <= temp <= 26:
+            msg = "Temperature %g outside preferred range of 23+-3 oC." % temp
+            logging.error(msg)
+            wait(msg)
+                        
+    def check_humidity(self, rh):
+        if not 30.0 <= rh <= 70.0:
+            msg = "Humidity %g outside preferred range of 50+-20%." % rh
+            logging.error(msg)
+            wait(msg)
+    
+    def check_pressure(self, pre):
+        if not 1003.0 <= pre <= 1023.0:
+            msg = "Pressure %g outside preferred range of 1013+-10."% pre
+            logging.error(msg)
+            wait(msg)
+    
+    def check_vpol(self, v):
+        if not 198.0 <= v <= 202.0:
+            msg = "Polirization V %g outside preferred range of 200+-2V." % v
+            logging.error(msg)
+            wait(msg)
+            
+    def calculate_fluctuation(self, v_list):
+        """Calculate fluctuation for a list of values.
+        """
+        mean_val = sum(v_list) / len(v_list)
+        max_val = max(v_list)
+        min_val = min(v_list)
+        highest_fluctuation = 20 * math.log10(max_val / mean_val)
+        lowest_fluctuation = 20 * math.log10(min_val/ mean_val)
+        if abs(highest_fluctuation) > abs(lowest_fluctuation):
+            return highest_fluctuation
+        else:
+            return lowest_fluctuation
+        
+    def calculate_uncertainties(self, SPL_standard, SPL_device, env_conditions):
+        print("TODO")

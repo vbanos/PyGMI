@@ -29,7 +29,12 @@ class Connect_Instrument():
             gain%=gain%-2%
           ENDIF
         ENDIF
+        
+        NOTE: O3 = 20dB
+              O4 = 10dB
+              O5 = 0dB
+        HELP: Manual page 56
         """
         logging.info("initialise - configure instrument")
-        self.io.write("A1S1I4O5G0F8N0D0R0")
+        self.io.write("A1S1I4O4G0F8N0D0R0")
         logging.info("Ready!")
