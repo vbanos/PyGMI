@@ -21,7 +21,7 @@ class Connect_Instrument():
         CALL BK2636.gain (bk2636%, 1%, 1%,  gain%, 5%, t..00001%)
         REM setup bk2636 detector (device, 0%=linear scale, 8%=Fast, 0%=Normal o/p, 0%=Fast Pk Decay, 0%=5dB Pk rise)
         
-        gain is a parameter calculated by microphone sensitivity
+        output gain is a parameter calculated by microphone sensitivity
         n%=Fmt(gain%,"%i<%s",igain$)
         IF micsensitivity#<-31.0# THEN
           gain%=gain%-1%
@@ -30,10 +30,13 @@ class Connect_Instrument():
           ENDIF
         ENDIF
         
-        NOTE: O3 = 20dB
+        NOTE: O2 = 30dB
+              O3 = 20dB
               O4 = 10dB
               O5 = 0dB
         HELP: Manual page 56
+        
+        Input gain must be  5 (0dB)
         """
         logging.info("initialise - configure instrument")
         self.set_gain(4) # 10dB
@@ -42,7 +45,7 @@ class Connect_Instrument():
     def set_gain(self, gain):
         # gain value may be 0 1 2 3 4 5
         print("gain number value %d" % gain)
-        self.io.write("A1S1I4O%dG0F8N0D0R0" % gain)
+        self.io.write("A1S1I5O%dG0F8N0D0R0" % gain)
         
     def decide_set_gain(self, calibrator_nominallevel, micsensitivity):
         """float number input by user"""
@@ -56,7 +59,7 @@ class Connect_Instrument():
         logging.info("Calibrator nominal level %d micsensitivity %d",
                      calibrator_nominallevel, micsensitivity)
         
-        igindex = (calibrator_nominallevel - -64.0)/10.0   # 3 - 4 - 5
+        igindex = (calibrator_nominallevel - 64)/10.0   # 3 - 4 - 5
         gain = igindex
         if micsensitivity <-31.0:
             gain -= 1

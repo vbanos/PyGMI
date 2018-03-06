@@ -94,7 +94,10 @@ class Script(threading.Thread):
            
         SPL_standard = []
         SPL_device = []
-         
+        
+        self.el100.set("99.99")
+        self.agilent3350A.turn_off()
+        
         t1 = float(getText("Initial temperature (oC)").strip())
         rh1 = float(getText("Initial humidity (%)").strip())
         p1 = self.dpi141.read() 
@@ -108,20 +111,18 @@ class Script(threading.Thread):
         self.micsensitivity = float(getText("Microphone Sensitivity (check certificate, e.g. -26.49)").strip())
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
         
-        for i in range(5):           
+        for _ in range(1):           
             self.stop_switch_instrument("Reference Standard") 
             res = self.measure_SPL("Reference Standard")
             SPL_standard.append(res)
-            # TODO enable again
+            
             #self.stop_switch_instrument("Customer Device")
             #res = self.measure_SPL("Customer Device") 
-            SPL_device.append(res)
-            # TODO remove this 
-            break               
+            SPL_device.append(res)               
         
         # final env conditions
-        t2 = t1 # TODO float(getText("Final temperature (oC)").strip())
-        rh2 = rh1 # TODO float(getText("Final humidity (%)").strip())
+        t2 = float(getText("Final temperature (oC)").strip())
+        rh2 = float(getText("Final humidity (%)").strip())
         p2 = self.dpi141.read()
         vpol2 = self.keithley2001.scan_channel(4, "VOLT:DC")[0]
         
@@ -135,8 +136,8 @@ class Script(threading.Thread):
                    pressure=(p1+p2)/2.0,
                    polarising_voltage=(vpol1+vpol2)/2.0)
         
-        standard_uncertainty = self.calculate_uncertainties(SPL_standard)
-        device_uncertainty = self.calculate_uncertainties(SPL_device)       
+        standard_uncertainty = self.calculate_uncertainties(SPL_standard, env)
+        device_uncertainty = self.calculate_uncertainties(SPL_device, env)       
                 
         self.print_results(env, SPL_standard, SPL_device, standard_uncertainty,
                            device_uncertainty)               
@@ -147,81 +148,78 @@ class Script(threading.Thread):
         """               
         self.agilent3350A.turn_off()
        
-        # check Keithley2001 DC & CURR stability/fluctuation. 
+        # check Keithley2001 DC & CURR stability/fluctuation. MA o/p (V) is vmic 
         dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=2, interval=0.99)  # TODO set times=20
         self._check_stability(dc_volt)
         vmic = sum(dc_volt) / len(dc_volt)
-        # MA o/p (V) is vmic
-        
-        # Read total harmonic distortion from Krohn Hite.
+                
+        # Read Total Harmonic Distortion (THD) from Krohn Hite. This is used in
+        # the final result
         kh_list1 = self.kh6880A.read(times=10, delay=1.99)
         kh_avg1 = sum(kh_list1) / len(kh_list1)
+        
         wait("Stop %s, press any key to continue..." % device_name)
                 
         # start agilent3350A, send 6V peak to peak, freq 1000Hz, SINE waveform.
         # the attenuator is adjusted until the voltage matches (to 0.005 db) the
         # output of the calibrator (VmicAmpl(ch5) - VinsertAmpl(ch5))           
-        self.agilent3350A.turn_on()
         # Vdev = Vmic
         # Vsys = Vins
-        
         # atten#=100.0# - micsensitivity# - nomlevel#
-        # micsensivity input variable by user (certificate). e.g. value -26.49
-        # nomlevel = 94
-        atten = 100.0 - (self.micsensitivity) - 94
+        # micsensivity input variable by user (certificate). e.g. value = -26.49
+        # calibrator nominal level e.g. value = 94
+        self.agilent3350A.turn_on()        
+        atten = 100.0 - self.micsensitivity - self.calibrator_nominalevel
         good_consec = 0
         vins = 0.0
         while good_consec < 2:
             attenuator_str = "%05.2f" % atten
             self.el100.set(attenuator_str)
             vins = self.keithley2001.scan_channel(5, "VOLT:DC")[0]
+            print("atten keithley channel 5 DC", vins, "vmic", vmic)
             # MA o/p (V) is vins
                         
-            # convert to dB
-            attenerror = abs(20.0 * math.log10(vmic / vins))
-            if attenerror <= 0.005:
+            # convert to dB and check value < 0.005 two times for success
+            attenerror = 20.0 * math.log10(vmic / vins)
+            if abs(attenerror) <= 0.005:
                 good_consec += 1
                 print("SUCCESS", attenerror)
             else:
                 print("ERROR", attenerror)
                 atten -= attenerror
                 time.sleep(5)
-        self.agilent3350A.turn_off()
-        
+                
         # measure Vins voltage (ch3) keythley
         dc_volt = self.keithley2001.scan_channel(3, "VOLT:AC", times=2, interval=0.99)  # TODO set times=20
-        vins_source3 = abs(sum(dc_volt) / len(dc_volt)) # TODO this was negative!!
+        vins_source3 = sum(dc_volt) / len(dc_volt)
         
         rd_avg = self.racaldana.read_average(times=2, delay=1.99)   # TODO set times=20
         logging.info("Racal Dana read %g", rd_avg)
         # Racal Dana values must be around 1000 Hz +-10%
-        # TODO fix
-        #if rd_avg < 900.0 or rd_avg > 1100.0:
-        #    wait("Critical Error! Racal Dana value outside range: %g. Terminating program." % rd_avg)
-        #    sys.exit(0)
+        if rd_avg < 900.0 or rd_avg > 1100.0:
+            wait("Critical Error! Racal Dana value outside range: %g. Terminating program." % rd_avg)
+            sys.exit(0)
             
-        # distortion value (kh6880A)
+        # Get Total Harmonic Distortion value for 2nd time from Krohn Hite (kh6880A)
+        # this kh_list2 is used ONLY to validate kh_list1 not in the results!!!
         kh_list2 = self.kh6880A.read(times=10, delay=1.99)      
         kh_avg2 = sum(kh_list2) / len(kh_list2)
         
-        # TODO ? Use kh_list1 and kh_list2 ?? Cannot understand what the original code does.
-        arr = numpy.array(kh_list2)
-        thd = numpy.std(arr)
-        
+        thd = sum(kh_list1) / len(kh_list1)
+                
         SPL = self.uncorrected_sound_pressure_level(vins_source3, atten,
-                                                    self.micsensitivity) 
-        krohn_hite = (kh_avg1 + kh_avg2)/2.0
-        # measurements
+                                                    self.micsensitivity)        
+        self.agilent3350A.turn_off()
+        
         return dict(
             attenuation=atten,
             thd=thd,
-            krohn_hite=krohn_hite,
+            krohn_hite=kh_avg1,
             racal_dana=rd_avg,
             SPL=SPL,
             Vmic=vmic,      # MA_op first
             Vins=vins,      # MA_op second
-            IV=vins_source3,  # THIS IS IV
-            p_v_corr=0  # TODO ?
+            IV=vins_source3
         )
         
     def uncorrected_sound_pressure_level(self, Vins, A, M):
@@ -233,7 +231,6 @@ class Script(threading.Thread):
         """
         SPL = (20.0*math.log10(Vins)) - (20.0 * math.log10(2.0*math.pow(10, -5))) -A - M
         return round(SPL, 3)
-
     
     def stop_switch_instrument(self, device):
         wait("Please connect and turn on the %s." % device)
@@ -295,7 +292,7 @@ class Script(threading.Thread):
         else:
             return lowest_fluctuation
         
-    def calculate_uncertainties(self, measurements):
+    def calculate_uncertainties(self, measurements, env):
         # TODO get from conf file
         Vinsert = 1.0005    # get from Voltmeter certificate uncertainty
         Verror = 1.0003     # get from voltmeter certificate uncertainty
@@ -327,12 +324,17 @@ class Script(threading.Thread):
         Kmv = 0.02    # correction of differing volume of microphones. Fixed value for mics 4180 & 4190.
         SPLr = 0.005  # resolution of result
         
+        pcorr = 0.0 # TODO later YIANIS 
+        vcorr = -20.0 * math.log10(env['polarising_voltage'] / 200.0)
+        pvcorr = round(pcorr + vcorr, 3)
+        
         SPL_avg = sum(item['SPL'] for item in measurements) / len(measurements)
         
         u_SPL = IVu + IVe - 20*math.log10(0.00002) - Au + Ae - Mu + Mp + Mt +\
                 MM + Kpv + Kp + Kmv + SPLr 
         
-        u_total = self.combined_uncertainty(IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv, Kp, Kmv, SPLr, SPL_avg)
+        u_total = self.combined_uncertainty(IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv,
+                                            Kp, Kmv, SPLr, SPL_avg)
                
         spls = numpy.array([item['SPL'] for item in measurements])
         u_type_A = numpy.std(spls) 
@@ -345,10 +347,12 @@ class Script(threading.Thread):
             u_thd=Au * 2.0,
             u_SPL=u_SPL,
             u_type_A=u_type_A,
-            u_frequency=u_frequency
+            u_frequency=u_frequency,
+            pvcorr=pvcorr
             )
      
-    def combined_uncertainty(self, IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv, Kp, Kmv, SPLr, spl):
+    def combined_uncertainty(self, IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv,
+                             Kp, Kmv, SPLr, spl):
         sqrt3 = math.sqrt(3)
 
         u_IVu = math.pow(IVu / 2.0, 2)
@@ -433,13 +437,13 @@ class Script(threading.Thread):
 
     def print_results(self, env, SPL_standard, SPL_device, standard_u, device_u):       
         header = "Freq(Hz)    MA o/p (V)    MA o/p (V)    IV (V)    Atten (dB)    P+V Corrn (dB), S.P.L. (dB)    THD (%)"
-        resline ="%.1f        %.2f          %.2f          %.2f      %.2f          %.2f            %.2f           %.2f"
+        resline ="%.1f        %.4f          %.4f          %.4f      %.2f          %.3f            %.2f           %.2f"
         
         def _print_instrument(header, resline, data, data_u):
             print(header)
             for row in data: 
                 print(resline % (row['racal_dana'], row['Vmic'], row['Vins'], row['IV'], row['attenuation'],
-                      row['p_v_corr'], row['SPL'], row['thd']))
+                      data_u['pvcorr'], row['SPL'], row['thd']))
             mean_freq = sum(row['racal_dana'] for row in data) / len(data)
             mean_SPL = sum(row['SPL'] for row in data) / len(data)
             mean_thd = sum(row['thd'] for row in data) / len(data)
