@@ -36,5 +36,31 @@ class Connect_Instrument():
         HELP: Manual page 56
         """
         logging.info("initialise - configure instrument")
-        self.io.write("A1S1I4O4G0F8N0D0R0")
+        self.set_gain(4) # 10dB
         logging.info("Ready!")
+    
+    def set_gain(self, gain):
+        # gain value may be 0 1 2 3 4 5
+        print("gain number value %d" % gain)
+        self.io.write("A1S1I4O%dG0F8N0D0R0" % gain)
+        
+    def decide_set_gain(self, calibrator_nominallevel, micsensitivity):
+        """float number input by user"""
+        # TODO PROBLEM with gain setting in BK2636
+        # gain setting configured by mic sensitivity
+        # line 1235 in BAS file.
+        # TODO input gain + output gain
+        # TODO
+        #self.io.write("A1S1I4O4G0F8N0D0R0")
+        # TODO mic nominal level also important
+        logging.info("Calibrator nominal level %d micsensitivity %d",
+                     calibrator_nominallevel, micsensitivity)
+        
+        igindex = (calibrator_nominallevel - -64.0)/10.0   # 3 - 4 - 5
+        gain = igindex
+        if micsensitivity <-31.0:
+            gain -= 1
+            if micsensitivity< -50.0:
+                gain -= 2
+        
+        self.set_gain(gain)

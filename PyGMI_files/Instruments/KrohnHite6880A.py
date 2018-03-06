@@ -24,14 +24,15 @@ class Connect_Instrument():
         """
         logging.info("initialise - configure instrument Krohn-Hite 6880A")
     
-    def read(self):
+    def read_value(self):
         return float(self.io.read())
     
-    def read_average(self, times=1, delay=0.0):
+    def read(self, times=1, delay=0.0):
         """Read N times with a delay interval. Return mean value.
         """
+        #logging.info("Kron Hite read %d times with delay %g", times, delay)
         results = []
         for _ in range(times):
-            results.append(self.read())
+            results.append(self.read_value())
             time.sleep(delay)
-        return float(sum(results) / len(results))
+        return results
