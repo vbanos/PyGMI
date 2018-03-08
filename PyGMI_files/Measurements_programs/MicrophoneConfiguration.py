@@ -6,6 +6,7 @@ import threading
 import time
 from Tkinter import *
 import tkMessageBox
+import winsound
 
 #from microphone_uncertainties import attenuator_uncertainty
 
@@ -53,6 +54,9 @@ def getText(requestMessage):
 def wait(msg):
     """Wait until any key is pressed.
     """
+    frequency = 2500  # Set Frequency To 2500 Hertz
+    duration = 1000  # Set Duration To 1000 ms == 1 second
+    winsound.Beep(frequency, duration)
     Tk().wm_withdraw() #to hide the main window
     tkMessageBox.showinfo("Calibration",msg)
 
@@ -72,6 +76,17 @@ class Script(threading.Thread):
         m=self.mainapp              #a shortcut to the main app, especially the instruments
         f=self.frontpanel           #a shortcut to frontpanel values
         reserved_bus_access=self.GPIB_bus_lock     #a lock that reserves the access to the GPIB bus
+        
+        #out = self.calculate_uncertainties([{'SPL': 93.99}, {'SPL':93.99}, {'SPL':93.99}], {})
+        #print(out)
+        #sys.exit(0)
+        
+        #val = self.corrected_spl(3.944, 43.85, -31.006, 1.9712, 1.973)  
+        #print("CORRECTED SPL", val)
+        #sys.exit(0)
+        #t = self.uncorrected_sound_pressure_level(Vins=1.9, A=43.84, M=94)
+        #print(t)
+        #sys.exit(0)
                 
         logging.info("init all instruments")
         self.keithley2001 = m.instr_1   # GBIP0::16
@@ -98,6 +113,17 @@ class Script(threading.Thread):
         self.el100.set("99.99")
         self.agilent3350A.turn_off()
         
+        # TODO
+        # ASK Microphone type
+        # LOAD configuration from C:\accoustics-configuration\mic-name.yaml
+        #    what settings?
+        #        
+        # ASK calibrator type
+        # LOAD configuration from C:\accoustics-configuration\calibrator-name.yaml
+        #    what settings?
+        #        Kpv
+        #        ??
+        
         t1 = float(getText("Initial temperature (oC)").strip())
         rh1 = float(getText("Initial humidity (%)").strip())
         p1 = self.dpi141.read() 
@@ -111,12 +137,16 @@ class Script(threading.Thread):
         self.micsensitivity = float(getText("Microphone Sensitivity (check certificate, e.g. -26.49)").strip())
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
         
-        for _ in range(1):           
-            self.stop_switch_instrument("Reference Standard") 
+        for _ in range(1):  # TODO 5           
+            self.stop_switch_instrument("Reference Standard")
+            # delay time necessary for calibrator
+            print("Wait for 20 sec")
+            time.sleep(20)
             res = self.measure_SPL("Reference Standard")
             SPL_standard.append(res)
             
             #self.stop_switch_instrument("Customer Device")
+            #time.sleep(5)
             #res = self.measure_SPL("Customer Device") 
             SPL_device.append(res)               
         
@@ -148,15 +178,16 @@ class Script(threading.Thread):
         """               
         self.agilent3350A.turn_off()
        
-        # check Keithley2001 DC & CURR stability/fluctuation. MA o/p (V) is vmic 
-        dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=2, interval=0.99)  # TODO set times=20
-        self._check_stability(dc_volt)
-        vmic = sum(dc_volt) / len(dc_volt)
-                
         # Read Total Harmonic Distortion (THD) from Krohn Hite. This is used in
         # the final result
         kh_list1 = self.kh6880A.read(times=10, delay=1.99)
         kh_avg1 = sum(kh_list1) / len(kh_list1)
+        print("AVG DISTORTION", kh_list1)
+    
+        # check Keithley2001 DC & CURR stability/fluctuation. MA o/p (V) is vmic 
+        dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=20, interval=0.99)
+        self._check_stability(dc_volt)
+        vmic = sum(dc_volt) / len(dc_volt)
         
         wait("Stop %s, press any key to continue..." % device_name)
                 
@@ -190,10 +221,10 @@ class Script(threading.Thread):
                 time.sleep(5)
                 
         # measure Vins voltage (ch3) keythley
-        dc_volt = self.keithley2001.scan_channel(3, "VOLT:AC", times=2, interval=0.99)  # TODO set times=20
+        dc_volt = self.keithley2001.scan_channel(3, "VOLT:AC", times=20, interval=0.99)
         vins_source3 = sum(dc_volt) / len(dc_volt)
         
-        rd_avg = self.racaldana.read_average(times=2, delay=1.99)   # TODO set times=20
+        rd_avg = self.racaldana.read_average(times=20, delay=1.99)
         logging.info("Racal Dana read %g", rd_avg)
         # Racal Dana values must be around 1000 Hz +-10%
         if rd_avg < 900.0 or rd_avg > 1100.0:
@@ -208,7 +239,7 @@ class Script(threading.Thread):
         thd = sum(kh_list1) / len(kh_list1)
                 
         SPL = self.uncorrected_sound_pressure_level(vins_source3, atten,
-                                                    self.micsensitivity)        
+                                                    self.micsensitivity)    # , vmic, vins)        
         self.agilent3350A.turn_off()
         
         return dict(
@@ -222,6 +253,13 @@ class Script(threading.Thread):
             IV=vins_source3
         )
         
+    def corrected_spl(self, Vins3, A, M, Vmic, Vins5):
+        
+        SPL = (20.0*math.log10(Vins3)) - A + (20.0 * math.log10(Vmic)) -\
+              (20.0*math.log10(Vins5)) - M - (20.0*math.log10(0.00002)) # - pressure correction
+        return SPL
+        
+        
     def uncorrected_sound_pressure_level(self, Vins, A, M):
         """SPL calculation. Params:
         Vins: measured insert voltage
@@ -229,7 +267,9 @@ class Script(threading.Thread):
         M: sensitivity (dB re 1 VPa-1)
         Output: SPL
         """
-        SPL = (20.0*math.log10(Vins)) - (20.0 * math.log10(2.0*math.pow(10, -5))) -A - M
+        print("Vins", Vins, "A", A, "M", M)
+        
+        SPL = (20.0*math.log10(Vins)) - (20.0*math.log10(0.00002)) -A - M
         return round(SPL, 3)
     
     def stop_switch_instrument(self, device):
@@ -263,7 +303,7 @@ class Script(threading.Thread):
                         
     def check_humidity(self, rh):
         if not 30.0 <= rh <= 70.0:
-            msg = "Humidity %g outside preferred range of 50+-20%." % rh
+            msg = "Humidity %g outside preferred range of 50+-20%%." % rh
             logging.error(msg)
             wait(msg)
     
@@ -291,65 +331,94 @@ class Script(threading.Thread):
             return highest_fluctuation
         else:
             return lowest_fluctuation
-        
+    
     def calculate_uncertainties(self, measurements, env):
-        # TODO get from conf file
-        Vinsert = 1.0005    # get from Voltmeter certificate uncertainty
-        Verror = 1.0003     # get from voltmeter certificate uncertainty
-        IVu = self.voltmeter_uncertainty(1.0005)
-        IVe = self.voltmeter_error(1.0003)
+        IVu = self.voltmeter_uncertainty(1.0005)    # value from certificate
+        IVe = self.voltmeter_uncertainty(1.0003)    # value from certificate
         
-        # based on the attenuation setting that was calculated in the calibration
         avg_attenuation = sum([row['attenuation'] for row in measurements]) / len(measurements)
         Au = self.attenuator_uncertainty(avg_attenuation)
         Ae = self.attenuator_error(avg_attenuation)
         
-        Mu = 0.01    # ref microphone sensitivity from certificate
-        Mp = 0.038   # correction to ref microphone sensitivity for static pressure from TABLE page 24 of 42.
+        Mu = 0.05   # value from certificate
+        Mp = 0.01   # table page 24 of 42
+        Mt = 0.007  # table page 25 of 42
+        MM = 0.005  # STANDARD page 25
+        Kpv = 0.0004    # BK2636 polarization voltage certificate
+        Kp = 0.01  # Page 26 of 42
+        Kmv = 0.0
+        SPLr = 0.005
         
-        # we use only mic models 4180 or 4190
-        # For 4180, we said:
-        #   31.5 - 2000     0.007
-        #   4000            0.012
-        #   8000            0.026
-        #  12500            0.047
-        #  16000            0.042
-        #
-        # mic model 4190
-        Mt = 0.050   # correction to ref microphone sensitivity for ambient temperature
+        sqrt3 = math.sqrt(3)
         
-        MM = 0.005    # error in matching the device's output voltage and the system voltage
-        Kpv = 0.01    # correction of polarising voltage
-        Kp = 0.02     # correction of static pressure. Fixed value for mics 4180 & 4190.
-        Kmv = 0.02    # correction of differing volume of microphones. Fixed value for mics 4180 & 4190.
-        SPLr = 0.005  # resolution of result
+        u_IVu = round(IVu / 2.0, 4)
+        u_IVu2 = pow(u_IVu, 2)
+        u_IVe = round(IVe / sqrt3, 4)
+        u_IVe2 = pow(u_IVe, 2)
+        u_Au = round(Au / 2.0, 4)
+        u_Au2 = pow(u_Au, 2)
+        u_Ae = round(Ae / sqrt3, 4)
+        u_Ae2 = pow(u_Ae, 2)
+        u_Mu = round(Mu / 2.0, 4)
+        u_Mu2 = pow(u_Mu, 2)
+        u_Mp = round(Mp / sqrt3, 4)
+        u_Mp2 = pow(u_Mp, 2)
+        u_Mt = round(Mt / sqrt3, 4)
+        u_Mt2 = pow(u_Mt, 2)
+        u_MM = round(MM / sqrt3, 4)
+        u_MM2 = pow(u_MM, 2)
+        u_Kpv = round(Kpv / sqrt3, 4)
+        u_Kpv2 = pow(u_Kpv, 2)
+        u_Kp = round(Kp / sqrt3, 4)
+        u_Kp2 = pow(u_Kp, 2)
+        u_Kmv = round(Kmv / sqrt3, 4)
+        u_Kmv2 = pow(u_Kmv, 2)
+        u_SPLr = round(SPLr / sqrt3, 4)
+        u_SPLr2 = pow(u_SPLr, 2)
+        
+        spls = numpy.array([row['SPL'] for row in measurements])
+        spl_repeatability = numpy.std(spls) 
+        # CHECK spl_repeatability = 0.0045
+        spl_repeatability2 = pow(spl_repeatability, 2)
+        #SPL_avg = sum(item['SPL'] for item in measurements) / len(measurements)
+        
+        total = u_IVu2 + u_IVe2 + u_Au2 + u_Ae2 + u_Mu2 + u_Mp2 + u_Mt2 + u_MM2 + u_Kpv2 +\
+                u_Kp2 + u_Kmv2 + u_SPLr2 + spl_repeatability2
+        total = math.sqrt(total)
         
         pcorr = 0.0 # TODO later YIANIS 
         vcorr = -20.0 * math.log10(env['polarising_voltage'] / 200.0)
         pvcorr = round(pcorr + vcorr, 3)
         
-        SPL_avg = sum(item['SPL'] for item in measurements) / len(measurements)
-        
-        u_SPL = IVu + IVe - 20*math.log10(0.00002) - Au + Ae - Mu + Mp + Mt +\
-                MM + Kpv + Kp + Kmv + SPLr 
-        
-        u_total = self.combined_uncertainty(IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv,
-                                            Kp, Kmv, SPLr, SPL_avg)
-               
-        spls = numpy.array([item['SPL'] for item in measurements])
-        u_type_A = numpy.std(spls) 
-        
         frequencies = numpy.array([item['racal_dana'] for item in measurements])
         u_frequency = numpy.std(frequencies) * 2.0
         
-        return dict(
-            u_total=u_total * 2.0,
-            u_thd=Au * 2.0,
-            u_SPL=u_SPL,
-            u_type_A=u_type_A,
+        #u_SPL = IVu + IVe - 20*math.log10(0.00002) - Au + Ae - Mu + Mp + Mt +\
+        #        MM + Kpv + Kp + Kmv + SPLr 
+              
+        out = dict(
+            IVu=u_IVu,
+            IVe=u_IVe,
+            Au=u_Au,
+            Ae=u_Ae,
+            Mu=u_Mu,
+            Mp=u_Mp,
+            Mt=u_Mt,
+            MM=u_MM,
+            Kpv=u_Kpv,
+            Kp=u_Kp,
+            SPLr=u_SPLr,
+            spl_repeatability=spl_repeatability,
+            total=total,
+            
+            u_total=total * 2.0,
+            u_thd=u_Au2 * 2.0,
+            u_SPL=spl_repeatability2 * 2.0,
+            u_type_A=spl_repeatability2 * 2.0,
             u_frequency=u_frequency,
             pvcorr=pvcorr
             )
+        return out
      
     def combined_uncertainty(self, IVu, IVe, Au, Ae, Mu, Mp, Mt, MM, Kpv,
                              Kp, Kmv, SPLr, spl):
@@ -366,12 +435,28 @@ class Script(threading.Thread):
         u_Kpv = math.pow(Kpv / sqrt3, 2)
         u_Kp = math.pow(Kp / sqrt3, 2)
         u_Kmv = math.pow(Kmv / sqrt3, 2)
+        u_SPL = IVu + IVe - 20*math.log10(0.00002) - Au + Ae - Mu + Mp + Mt +\
+                MM + Kpv + Kp + Kmv + SPLr 
         u_SPLr = math.pow(SPLr / sqrt3, 2)       
     
         total = u_IVu + u_IVe + u_Au + u_Ae + u_Mu + u_Mp + u_Mt + u_MM + u_Kpv +\
                 u_Kp + u_Kmv + u_SPLr
-        return round(math.sqrt(total), 3)   
-                
+        return dict(
+            IVu=u_IVu,
+            IVe=u_IVe,
+            Au=u_Au,
+            Ae=u_Ae,
+            Mu=u_Mu,
+            Mp=u_Mp,
+            Mt=u_Mt,
+            MM=u_MM,
+            Kpv=u_Kpv,
+            Kp=u_Kp,
+            Kmv=u_Kmv,
+            SPL=u_SPL,
+            SPLr=u_SPLr,
+            total=round(math.sqrt(total), 3)   
+            )
     
     def voltmeter_uncertainty(self, val):
         """Keithley2001
@@ -435,9 +520,12 @@ class Script(threading.Thread):
     def coverage_factor(self, niterns, urfreq, ufreq, k_necessary):
         return 0.1
 
-    def print_results(self, env, SPL_standard, SPL_device, standard_u, device_u):       
+    def print_results(self, env, SPL_standard, SPL_device, standard_u, device_u):  
+        # TODO IV (V) double value!!
+        # TODO Freq unc = 0.00 there must be a small value here
+        # TODO SPL wrong -> depends on IV (V)
         header = "Freq(Hz)    MA o/p (V)    MA o/p (V)    IV (V)    Atten (dB)    P+V Corrn (dB), S.P.L. (dB)    THD (%)"
-        resline ="%.1f        %.4f          %.4f          %.4f      %.2f          %.3f            %.2f           %.2f"
+        resline ="%.1f        %.4f          %.4f          %.4f      %.2f          %.3f            %.2f           %.1f"
         
         def _print_instrument(header, resline, data, data_u):
             print(header)
@@ -454,6 +542,10 @@ class Script(threading.Thread):
             print("Type A unc = %.3f dB Total unc = %.3f dB" % (
                 data_u['u_type_A'], data_u['u_total']))
             
+        def _print_uncertainties(data_u):
+            for key in data_u:
+                print(key, data_u[key])
+            
         print("Pressure %.2f Temperature %.2f Relative Humidity %.2f" % (
               env['pressure'], env['temperature'], env['relative_humidity']))
         print("Polarising Voltage %.2f" % env['polarising_voltage'])
@@ -462,3 +554,8 @@ class Script(threading.Thread):
         _print_instrument(header, resline, SPL_standard, standard_u)
         print("--- Customer Device Results ---")
         _print_instrument(header, resline, SPL_device, device_u)
+        
+        print("--- Working Standard Detailed Uncertainties ---")
+        _print_uncertainties(standard_u)
+        print("--- Customer Device Detailed Uncertainties ---")
+        _print_uncertainties(device_u)
