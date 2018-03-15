@@ -75,10 +75,10 @@ class Script(threading.Thread):
     def run(self):
         """General configuration is loaded from C:\acoustics-configuration\general.yaml 
         """
-        with open('C:/acoustics-configuration/general.yaml', 'r') as stream:
+        with open('C:/acoustics-configuration/slm-general.yaml', 'r') as stream:
             self.GENERAL_CONF = yaml.load(stream)     
-            assert self.GENERAL_CONF.get('ITERATIONS')
-            assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
+            #assert self.GENERAL_CONF.get('ITERATIONS')
+            #assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
         
         m=self.mainapp              #a shortcut to the main app, especially the instruments
         f=self.frontpanel           #a shortcut to frontpanel values
@@ -92,10 +92,23 @@ class Script(threading.Thread):
         self.bk2636 = m.instr_5         # GBIP0::4
         self.dpi141 = m.instr_6         # GBIP0::2
         self.el100 = m.instr_7          # GBIP0::3
-                           
-        SPL_standard = []
-        SPL_device = []
+                                   
+        standard = getText("Which standard do you use? 60651 or 61672-3?").strip()
         
+        if standard == "60651":
+            self.run_60651()        
+        elif standard == "61672-3":
+            self.run_61672_3()
+        else:
+            logging.error("No valid standard selected")
+            sys.exit(0)
+    
+    def run_60651(self):
+        """Old standard"""
+        pass
+    
+    def run_61672_3(self):
+        """New standard"""
         self.el100.set("99.99")
         self.agilent3350A.turn_off()
         
@@ -108,9 +121,6 @@ class Script(threading.Thread):
         calibrator_type = getText("Calibrator type? (e.g. XXX)").strip()
         with open('C:/acoustics-configuration/%s.yaml' % calibrator_type, 'r') as stream:
             self.CALIBRATOR_CONF = yaml.load(stream)
-        #        Kpv
-        #        ??
-        # TODO which settings go in there?
         
         t1 = float(getText("Initial temperature (oC)").strip())
         rh1 = float(getText("Initial humidity (%)").strip())
@@ -125,20 +135,13 @@ class Script(threading.Thread):
         self.micsensitivity = float(getText("Microphone Sensitivity (check certificate, e.g. -26.49)").strip())
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
         
-        for _ in range(self.GENERAL_CONF.get('ITERATIONS')):           
-            self.stop_switch_instrument("Reference Standard")
-            # delay time necessary for calibrator
-            wait_time = self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
-            print("Wait for %d sec" % wait_time)
-            time.sleep(wait_time)
-            res = self.measure_SPL("Reference Standard")
-            SPL_standard.append(res)
-            
-            self.stop_switch_instrument("Customer Device")
-            print("Wait for %d sec" % wait_time)
-            time.sleep(wait_time)
-            res = self.measure_SPL("Customer Device") 
-            SPL_device.append(res)               
+        self.frequency_weightings()
+        self.linearity()
+        self.time_weighting()
+        self.RMS_accuracy_and_overload()
+        self.peak_response()
+        self.time_averaging()
+        self.pulse_range_SEL_and_overload()
         
         # final env conditions
         t2 = float(getText("Final temperature (oC)").strip())
@@ -546,14 +549,93 @@ class Script(threading.Thread):
         print("--- Customer Device Detailed Uncertainties ---")
         _print_uncertainties(device_u)
         
-    def debugging_script(self):
-        """debugging script to run to check things. NOT used normally.
-        agilent on
-        kh on
-        racal on
-        keithley 2001 must read channel 3 AC, value 1 V
-        """      
-        self.agilent3350A.turn_on()
-        v_test = self.keithley2001.scan_channel(3, "VOLT:AC")
-        print(v_test)    
-        sys.exit(0)
+    
+    def frequency_weightings(self):
+        """TODO must do this 3 times for A, C and linear results
+        """
+        self.el100.set("30.83")
+        frequencies = [1000.0, 2000.0, 4000.0, 8000.0, 12500.0, 31.5, 63.0, 125.0, 250.0, 500.0]
+        windscreen_correction = 0.0
+        
+        results = []
+        for freq in frequencies:
+            self.agilent3350A.set_frequency(freq)
+            # TODO 
+            slm_reading = float(getText("SLM reading (dB)?").strip())
+            # TODO calculate the class of the SLM, not just pass/fail
+            windshield_correction = 0.0
+            case_correction = 0.0
+            overall_response = 0.0
+            slm_class = 1
+            row = [freq, slm_reading, windshield_correction, case_correction,
+                   overall_response, slm_class]
+            results.append(row)
+    
+        print("Frequency Weighting XXX Results")
+        print("Frequency    Attn    Slm reading    Windshield corr    Case corr    Overall response    Class")
+        print("   (Hz)      (dB)       (dB)            (dB)              (dB)            (dB)")
+        for row in results:
+            print("%.1f      %.2f        %.2f          %.2f              %.2f            %.2f            %d" % (
+                row[0], row[1], row[2], row[3], row[4], row[5], row[6]))        
+    
+    def linearity(self):
+        """TODO SET SPL and LEQ settings, run 2 times.
+        """
+        nominal_spls = [32.0, 33.0, 34.0, 35.0, 36.0, 39.0, 44.0, 49.0, 54.0, 59.0,
+                        64.0, 69.0, 74.0, 79.0, 84.0, 89.0, 94.0, 99.0, 104.0, 109.0,
+                        114.0, 119.0, 124.0, 126.0, 127.0, 128.0, 129.0, 130.0]
+        attn_setting = [99.69, 98.67, 97.66, 96.63, 95.62, 92.59, 87.56, 82.54, 77.53, 72.52,
+                        67.53, 62.53, 57.53, 52.53, 47.54, 42.53, 37.54, 32.54, 27.54, 22.54,
+                        17.55, 12.55, 7.56, 5.56, 4.56, 3.56, 2.56, 1.56]
+        
+        for i in range(len(nominal_spls)):
+            self.el100.set(str(attn_setting[i]))
+            diff_re_refspl = 0.0    # TODO
+            nom_diff = 0.0  # TODO
+            dvm_rdg = 0.0   # TODO
+            slm_class = 1   # TODO
+        
+        pass
+    
+    def time_weighting(self):
+        # TODO
+        pass
+    
+    def RMS_accuracy_and_overload(self):
+        # TODO ??
+        # Attenuator adjusted to an SLM Reading of 123 dB for the continuous signal
+        # Attenuator reading = 9.06 dB
+        # SLM reading = 123.28 dB
+        # Nominal reading = 123 dB
+        
+        # TODO signal increased until SLM overload ??
+        # SLM Reading = 125.74 dB
+        # Signal reduced by 1 dB    SLM Reading = 124.74 dB
+        # Signal reduced by 3 dB    SLM Reading = 121.74 dB
+        #     Nominal SLM Reading = 121.74 dB
+        pass
+    
+    def peak_response(self):
+        #TODO
+        pass
+    
+    def time_averaging(self):
+        # TODO
+        self.el100.set("31.8")
+        # function generator set to burst, Slm to Leq and attenuator adjusted by -30dB
+        self.el100.set("41.8")
+        # function generator set to burst, Slm to Leq and attenuator adjusted by -40dB
+        self.el100.set("76.25")
+        # channel 1 reconnected and adjusted to read 90 dB
+        # 40 cycle bursts applied, Slm set to Leq and reset
+        # SLM reading after 10s = X   Y    Z 
+        # Nominal Reading = X dB
+        pass
+    
+    def pulse_range_SEL_and_overload(self):
+        # TODO
+        # 40 cycle bursts applied. Slm set to SEL and reset.
+        # SLM reading = 70.05, 70.05, 70.05 dB
+        
+        
+        pass
