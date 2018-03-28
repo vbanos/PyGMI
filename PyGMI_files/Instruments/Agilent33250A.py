@@ -35,6 +35,6 @@ class Connect_Instrument():
         logging.info("Ensure function generator provides zero output")
         self.io.write("APPL:SIN 0.0, 0.0")
 
-    def set_frequency(self, freq):
+    def set_frequency(self, freq, volt=0.0):
         logging.info("Set Agilent 33250A Frequency: %g", freq)
-        self.io.write("APPL:SIN %g, 0.0" % freq)
+        self.io.write("APPL:SIN %g, %g" % (freq, volt))
