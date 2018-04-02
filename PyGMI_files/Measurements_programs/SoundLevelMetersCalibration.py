@@ -68,34 +68,75 @@ class SlmData(object):
         self.frame.pack()
         
         self.reference_SPL = DoubleVar()
+        Label(self.frame, text="Reference SPL:").grid(row=0)        
+        Entry(self.frame, textvariable=self.reference_SPL).grid(row=0, column=1)
+
+        self.frequency_weighting = DoubleVar()
+        Label(self.frame, text="Frequency Weighting:").grid(row=1)
+        Entry(self.frame, textvariable=self.frequency_weighting).grid(row=1, column=1)
         
         self.linearity_range = DoubleVar()
+        Label(self.frame, text="Linearity Range:").grid(row=2)
+        Entry(self.frame, textvariable=self.linearity_range).grid(row=2, column=1)
         
         self.PIR_upper_limit = DoubleVar()
+        Label(self.frame, text="PIR upper limit:").grid(row=3)
+        Entry(self.frame, textvariable=self.PIR_upper_limit).grid(row=3, column=1)
         
         self.pulse_range = DoubleVar()
+        Label(self.frame, text="Pulse Range:").grid(row=4)
+        Entry(self.frame, textvariable=self.pulse_range).grid(row=4, column=1)
         
         self.min_slm_indication = DoubleVar()
+        Label(self.frame, text="Min slm indication:").grid(row=5)
+        Entry(self.frame, textvariable=self.min_slm_indication).grid(row=5, column=1)
         
-        # Level Ranges
+        Label(self.frame, text="Level Ranges").grid(row=6, column=0)
+        Label(self.frame, text="Upper").grid(row=6, column=1)
+        Label(self.frame, text="Lower").grid(row=6, column=2)
+                
         self.ref_upper_level_range = DoubleVar()
-        
         self.ref_lower_level_range = DoubleVar()
+        Label(self.frame, text="REF").grid(row=7)
+        Entry(self.frame, textvariable=self.ref_upper_level_range).grid(row=7, column=1)
+        Entry(self.frame, textvariable=self.ref_lower_level_range).grid(row=7, column=2)
         
-        # TODO make form to input SLM data
-        #    Reference SPL    REF    
-        #    Linearity Range
-        #    PIR upper limit
-        #    Pulse range
-        #    min slm indicator
-        #    Level ranges: upper - lower (2 values for each)
-        #     e.g.    120 50
-        #             130 60
-        #             110 40
-        #             100 30
-        #              90 20
-        #              80 10
-        #             One of these is REF, we put this first 
+        self.ref_level_ranges_upper = [DoubleVar() for _ in range(9)]
+        self.ref_level_ranges_lower = [DoubleVar() for _ in range(9)]
+        
+        row = 8
+        for i in range(len(self.ref_level_ranges_upper)):
+            row += i
+            Label(self.frame, text="").grid(row=row)
+            Entry(self.frame, textvariable=self.ref_level_ranges_upper[i]).grid(row=row, column=1)
+            Entry(self.frame, textvariable=self.ref_level_ranges_lower[i]).grid(row=row, column=2)
+             
+        row += 1
+        Label(self.frame, text="Frequency").grid(row=row)
+        Label(self.frame, text="Case Correction").grid(row=row, column=1)
+        Label(self.frame, text="Windshield Correction").grid(row=row, column=2)
+        
+        row += 1
+        labels = [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 12500, 16000]
+        self.case_corrections = [DoubleVar() for _ in range(11)]
+        self.windshield_corrections = [DoubleVar() for _ in range(11)]
+        for i in range(len(labels)):
+            row += i
+            Label(self.frame, text="%g Hz" % labels[i]).grid(row=row)
+            Entry(self.frame, textvariable=self.case_corrections[i]).grid(row=row, column=1)
+            Entry(self.frame, textvariable=self.windshield_corrections[i]).grid(row=row, column=2)
+
+        b = Button(self.root,text='OK',command=self.get_selection)
+        b.pack(side='bottom')
+
+    def get_selection(self):
+        self.root.withdraw()
+        self.root.destroy()
+        self.root.quit()
+
+    def waitForInput(self):
+        self.root.mainloop()
+
 
 class selectMethods(object):
     def __init__(self):
@@ -186,6 +227,30 @@ def wait(msg):
 
 ######create a separate thread to run the measurements without freezing the front panel######
 class Script(threading.Thread):
+    # The following tables are optionally updated by the UI (tkinter forms).
+    case_correction = {  31.5: 0.0,
+                         63.0: 0.0,
+                        125.0: 0.0,
+                        250.0: 0.0,
+                        500.0: 0.0,
+                       1000.0: 0.0,
+                       2000.0: 0.0,
+                       4000.0: 0.0,
+                       8000.0: 0.0,
+                      12500.0: 0.0,
+                      16000.0: 0.0}
+    
+    windshield_correction = {  31.5: 0.0,
+                               63.0: 0.0,
+                              125.0: 0.0,
+                              250.0: 0.0,
+                              500.0: 0.0,
+                             1000.0: 0.0,
+                             2000.0: 0.0,
+                             4000.0: 0.0,
+                             8000.0: 0.0,
+                            12500.0: 0.0,
+                            16000.0: 0.0}
             
     def __init__(self,mainapp,frontpanel,data_queue,stop_flag,GPIB_bus_lock,**kwargs):
         #nothing to modify here
@@ -203,20 +268,28 @@ class Script(threading.Thread):
         #    self.GENERAL_CONF = yaml.load(stream)     
         #    #assert self.GENERAL_CONF.get('ITERATIONS')
         #    #assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
-       
-        std = Standard61672()
-        myclass = std.frequency_weighting_tolerance_limits("A", 2000.0, 95.0, 99.21, 0.1, 0.1)
-        print(myclass)
-        sys.exit(0)
 
         m=self.mainapp              #a shortcut to the main app, especially the instruments
         f=self.frontpanel           #a shortcut to frontpanel values
         reserved_bus_access=self.GPIB_bus_lock     #a lock that reserves the access to the GPIB bus
                
         logging.info("init all instruments")
+        measurement_options = SlmData()
+        measurement_options.waitForInput()
+        
+        print("REF SPL", measurement_options.reference_SPL.get())
+        
+        
+        self.std61672 = Standard61672()
+        sys.exit(0)
+        
         self.keithley2001 = m.instr_1   # GBIP0::16
         self.agilent3350A = m.instr_2   # GBIP0::20
         self.el100 = m.instr_3          # GBIP0::3
+        
+        
+        
+        
         
         # TODO make form to input SLM data
         #    Reference SPL    REF    
@@ -289,31 +362,29 @@ class Script(threading.Thread):
         self.el100_ref_value = getText("What is the attenuator value when SLM value is %g?" % self.slm_ref_value)
         
         self.el100.set("30.83")
-        frequencies = [1000.0, 2000.0, 4000.0, 8000.0, 12500.0, 31.5, 63.0, 125.0, 250.0, 500.0]
-        windscreen_correction = 0.0
+        frequencies = [1000.0, 2000.0, 4000.0, 8000.0, 16000.0, 31.5, 63.0, 125.0, 250.0, 500.0]
+        for weighting in ["A", "C", "Z"]:
+            wait("Please set your Sound Level Meter to %s weighting and press any key to continue." % weighting)
+            results = []
+            for freq in frequencies:
+                self.agilent3350A.set_frequency(freq, vol=4.0)
+                slm_reading = float(getText("SLM reading (dB)?").strip())
+                case_correction = self.case_correction[freq]
+                windshield_correction = self.windshield_correction[freq]
+                overall_response = slm_reading + case_correction + windshield_correction
+                slm_class = self.std61672.frequency_weighting_tolerance_limits(
+                    weighting, freq, 95.0, slm_reading, windshield_correction, case_correction)    
+                
+                row = [freq, slm_reading, windshield_correction, case_correction,
+                       overall_response, slm_class]
+                results.append(row)
         
-        results = []
-        for freq in frequencies:
-            self.agilent3350A.set_frequency(freq, vol=4)
-            # TODO 
-            slm_reading = float(getText("SLM reading (dB)?").strip())
-            # TODO calculate the class of the SLM, not just pass/fail
-            windshield_correction = 0.0
-            case_correction = 0.0
-            overall_response = 0.0
-            # slm_class = # 1 or 2
-            
-            
-            row = [freq, slm_reading, windshield_correction, case_correction,
-                   overall_response, slm_class]
-            results.append(row)
-    
-        print("Frequency Weighting XXX Results")
-        print("Frequency    Attn    Slm reading    Windshield corr    Case corr    Overall response    Class")
-        print("   (Hz)      (dB)       (dB)            (dB)              (dB)            (dB)")
-        for row in results:
-            print("%.1f      %.2f        %.2f          %.2f              %.2f            %.2f            %d" % (
-                row[0], row[1], row[2], row[3], row[4], row[5], row[6]))        
+            print("Frequency Weighting %s Results" % weighting)
+            print("Frequency    Attn    Slm reading    Windshield corr    Case corr    Overall response    Class")
+            print("   (Hz)      (dB)       (dB)            (dB)              (dB)            (dB)")
+            for row in results:
+                print("%.1f      %.2f        %.2f          %.2f              %.2f            %.2f            %d" % (
+                    row[0], row[1], row[2], row[3], row[4], row[5], row[6]))        
     
     def linearity(self):
         """TODO SET SPL and LEQ settings, run 2 times.
