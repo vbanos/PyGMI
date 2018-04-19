@@ -30,13 +30,18 @@ class Connect_Instrument():
         self.io.write("FA")
         self.io.write("N")
         result = self.io.ask("")
-        return float(result.replace("FA+", ""))
+        return round(float(result.replace("FA+", "")), 3)
     
-    def read_average(self, times=1, delay=0.0):
-        """Read N times with a delay interval. Return mean value.
-        """
+    def read_list(self, times=1, delay=0.0):
         results = []
         for _ in range(times):
             results.append(self.read())
             time.sleep(delay)
-        return float(sum(results) / len(results))
+        return results
+    
+    def read_average(self, times=1, delay=0.0):
+        """Read N times with a delay interval. Return mean value.
+        """
+        results = self.read_list(times, delay)
+        print(results)
+        return round(float(sum(results) / len(results)), 3)

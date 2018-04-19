@@ -5,6 +5,7 @@ import pprint
 import threading
 import time
 from Tkinter import *
+import ttk
 from tkFileDialog import askopenfilename
 import tkMessageBox
 import winsound
@@ -80,8 +81,8 @@ class Standard60651(object):
                                              case_correction):
         # TODO different tables than 60672
         pass
-
-
+    
+# TODO accoustical signal Par. 11
 
 class selectMethods(object):
     def __init__(self):
@@ -89,27 +90,45 @@ class selectMethods(object):
         self.frame = Frame(self.root)
         self.frame.pack()
         
+        # 61672-3 Electrical Tests Par. 12  
         self.frequency_weighting = IntVar()
-        l = Checkbutton(self.root, text="Frequency Weighting", variable=self.frequency_weighting)
-        l.pack()
+        self.frequency_weighting_chk = ttk.Checkbutton(self.root, text="Frequency Weighting",
+                                                       variable=self.frequency_weighting)
+        self.frequency_weighting_chk.pack()
+        
+        # 61672-3 Electrical Tests Par. 14 & 15
         self.linearity = IntVar()
-        l = Checkbutton(self.root, text="Linearity", variable=self.linearity)
-        l.pack()
+        self.linearity_chk = Checkbutton(self.root, text="Linearity", variable=self.linearity)
+        self.linearity_chk.pack()
+        
+        # 61672-3 Electrical Tests Par. 13 TODO change name to Frequency and time weighting
         self.time_weighting = IntVar()
-        l = Checkbutton(self.root, text="Time Weighting", variable=self.time_weighting)
-        l.pack()
+        self.time_weighting_chk = Checkbutton(self.root, text="Time Weighting", variable=self.time_weighting)
+        self.time_weighting_chk.pack()
+        
+        # 61672-3 Electrical Tests Par. 18 TODO change name Overload indication    
         self.rms_accuracy = IntVar()
-        l = Checkbutton(self.root, text="RMS Accuracy", variable=self.rms_accuracy)
-        l.pack()
+        self.rms_accuracy_chk = Checkbutton(self.root, text="RMS Accuracy", variable=self.rms_accuracy)
+        self.rms_accuracy_chk.pack()
+        
+        # # 61672-3 Electrical Tests Par. 17 TODO change name Peak C sound level
         self.peak_response = IntVar()
-        l = Checkbutton(self.root, text="Peak Response", variable=self.peak_response)
-        l.pack()
+        self.peak_response_chk = Checkbutton(self.root, text="Peak Response", variable=self.peak_response)
+        self.peak_response_chk.pack()
+        
+        # 61672-3 Electrical Tests Par. 16 Tone burst response       
+        
+        
+        """
         self.time_averaging = IntVar()
-        l = Checkbutton(self.root, text="Time Averaging", variable=self.time_averaging)
-        l.pack()
+        self.time_averaging_chk = Checkbutton(self.root, text="Time Averaging", variable=self.time_averaging)
+        self.time_averaging_chk.pack()
+        
         self.pulse_range = IntVar()
-        l = Checkbutton(self.root, text="Pulse Range SEL and Overload", variable=self.pulse_range)
-        l.pack()
+        self.pulse_range_chk = Checkbutton(self.root, text="Pulse Range SEL and Overload", variable=self.pulse_range)
+        self.pulse_range_chk.pack()
+        """
+        
         b = Button(self.root,text='OK',command=self.get_selection)
         b.pack(side='bottom')
 
@@ -117,6 +136,15 @@ class selectMethods(object):
         self.root.mainloop()
         
     def get_selection(self):
+        
+        self.frequency_weighting_checked = 'selected' in self.frequency_weighting_chk.state()
+        self.linearity_checked = 'selected' in self.linearity_chk.state()
+        self.time_weighting_checked = 'selected' in self.time_averaging_chk.state()
+        self.rms_accuracy_checked = 'selected' in self.rms_accuracy_chk.state()
+        self.peak_response_checked = 'selected' in self.peak_response_chk.state()
+        self.time_averaging_checked = 'selected' in self.time_averaging_chk.state()
+        self.pulse_range_checked = 'selected' in self.pulse_range_chk.state()
+        
         self.root.withdraw()
         self.root.destroy()
         self.root.quit()
@@ -226,28 +254,25 @@ class Script(threading.Thread):
         """New standard
         """
         options = selectMethods()
-        options.waitForInput()
-                
-        print("Frequency weighting", options.frequency_weighting.get())
-        print("Linearity", options.linearity.get())
-        # self.frequency_weightings()
-        self.linearity()
-        """TODO
-        if options.frequency_weighting.get() == 1:
+        options.waitForInput()      
+                        
+        if options.frequency_weighting_checked:
             self.frequency_weightings()
-        if options.linearity.get() == 1:
+        if options.linearity_checked:
             self.linearity()
-        if options.time_weighting.get() == 1:
+        if options.time_weighting_checked:
             self.time_weighting()
-        if options.rms_accuracy.get() == 1:
+        if options.rms_accuracy_checked:
             self.RMS_accuracy_and_overload()
-        if options.peak_response.get() == 1:
+        if options.peak_response_checked:
             self.peak_response()
-        if options.time_averaging.get() == 1:
+        if options.time_averaging_checked:
             self.time_averaging()
-        if options.pulse_range.get() == 1:
+        if options.pulse_range_checked:
             self.pulse_range_SEL_and_overload()      
-        """
+        print("END OF MEASUREMENTS")
+        sys.exit(0)
+        
         
     def frequency_weightings(self):
         """TODO initial el100 value 94 is not fixed. It is calculated by SLM manual values.
@@ -296,20 +321,14 @@ class Script(threading.Thread):
     def linearity(self):
         """TODO the problem is that we need to set an ACPP value to get attenuator ~ 50+-10.
         If we get initial attenuator value very low or high, there will a problem with other measurements.
-                
-                
+                                
         2. tune attenuator until SPL = 99 (94 + 5) ... 
-        
-        
-        uncertainty is fixed 0.2
-        
-        
+                
+        uncertainty is fixed 0.2     
         
         COLUMNS
         Nominal SPL (dB)    Attn Setting (dB)    Diff ref  RefSPL    Nom Diff    Deviation    Uncertainty (dB) Class
-        
         """
-
         linear_operating_range = self.conf.get('linear_operating_range')
         linear_operating_range_lower = linear_operating_range.get('min')
         ref_point_linearity_check = 94 # FIXED value
@@ -328,7 +347,8 @@ class Script(threading.Thread):
         wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
              linear_operating_range_lower,linear_operating_range_upper))
         
-        self.agilent3350A.set_frequency(8000.0, volt=38.1)  # ACPP (peak to peak). TODO what is the correct volt value??
+        self.agilent3350A.set_frequency(self.conf.get('generator_frequency'),
+                                        volt=self.conf.get('generator_voltage'))  # ACPP (peak to peak). TODO what is the correct volt value??
         
         # TODO save keithley value after we set agilent frequency for ALL linearity measurements       
         ref_attenuation = float(getText("What is the attenuator value when SLM reads %g (dB)?" % ref_point_linearity_check))        
@@ -336,6 +356,9 @@ class Script(threading.Thread):
         results = []
         for slm in range_upper:
             atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm))
+            # SKIP line when atten = 0 (cannot reach the SLM value)
+            if atten == 0.0:
+                continue
             dif_ref_refspl = slm -  ref_point_linearity_check # TODO ???
             nom_dif = slm -  ref_point_linearity_check
             deviation = dif_ref_refspl - nom_dif
@@ -346,6 +369,9 @@ class Script(threading.Thread):
             
         for slm in range_lower:
             atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm))
+            # SKIP line when atten = 0 (cannot reach the SLM value)
+            if atten == 0.0:
+                continue
             dif_ref_refspl = slm -  ref_point_linearity_check # TODO ???
             nom_dif = slm -  ref_point_linearity_check
             deviation = dif_ref_refspl - nom_dif
@@ -363,13 +389,46 @@ class Script(threading.Thread):
         
         """if level ranges has multiple values beyond REF, perform extra test.
         Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
-        Section 6.9, standard 61672-3 clause 15.2
+        Section 6.9, standard 61672-3 clause 15.2 15.3 15.4
         Note that agilent is already set to 8000 Hz and volt TODO ACPP
         """
+        self.agilent3350A.set_frequency(1000.0, volt=self.conf.get('generator_voltage'))
         level_ranges = self.conf.get('level_ranges')
         if len(level_ranges) > 1:
             ref_atten = None
+            ref_slm = None
             results = []
+            for lrange in level_ranges[1:]:
+                wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (lrange[0], lrange[1]))
+                wait("Please set attenuator value to %f" % ref_attenuation)
+                slm = float(getText("What is the SLM value?"))
+                if not ref_slm:
+                    ref_slm = slm                    
+                deviation = ref_slm - slm
+                uncertainty = 0.2
+                linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+                results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
+                                ref_slm,
+                                slm,
+                                deviation,
+                                uncertainty,
+                                linearity_class])
+                    
+            def _print_slm_range_results(results):
+                print("SLM range setting    Expected value    SLM Reading value    Deviation    Uncertainty    Class")
+                print("      (dB)                (dB)                (dB)            (dB)            (dB)        ")
+                for row in results:
+                    print("    %s        %.2f           %.2f            %.2f        %.2f          %d" % (
+                        row[0], row[1], row[2], row[3], row[4], row[5]))
+        
+            _print_slm_range_results(results)
+        
+            """Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
+            Section 6.9, standard 61672-3 clause 15.4
+            """
+            results = []
+            self.agilent3350A.set_frequency(1000.0, volt=self.conf.get('generator_voltage'))
+            ref_atten = float(getText("What is the attenuator value when SLM reads %g (dB) (upper limit - 5)?" % lrange[1] - 5))
             for lrange in level_ranges[1:]:
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (lrange[0], lrange[1]))
                 slm = float(getText("What is the SLM value?"))
@@ -378,45 +437,89 @@ class Script(threading.Thread):
                 deviation = ref_slm - slm
                 uncertainty = 0.2
                 linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
-                results.push(["%.2f - %.2f" % (lrange[0], lrange[1]),
-                              ref_slm,
-                              slm,
-                              deviation,
-                              uncertainty,
-                              linearity_class])
-                    
-            print("SLM range setting    Expected value    SLM Reading value    Deviation    Uncertainty    Class")
-            print("      (dB)                (dB)                (dB)            (dB)            (dB)        ")
-            for row in results:
-                print("    %s        %.2f           %.2f            %.2f                %.2f          %d" % (
-                    row[0], row[1], row[2], row[3], row[4], row[5]))
-        """    
-        # TODO
-        15.4
-        set SLM range to REF
-        set agilent to 1000 khz & TODO ACP voltage
-        configure attenuator
-        the aim is to have SPL = upper range limit - 5
+                results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
+                                ref_slm,
+                                slm,
+                                deviation,
+                                uncertainty,
+                                linearity_class])
         
-        once we find the attenuator value, we change SLM range to the rest of the available options.
-        save indicated level
-        Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
-        Section 6.9, standard 61672-3 clause 15.4
-        
-        COLUMNS
-        SLM range setting (dB)    Expected value (dB)    SLM Reading value (dB)    Deviation (dB)    Uncertainty (dB)    Tolerance limit (-) Class 1    Tolerance limit (+) Class 1
-        
-        END of linearity range test
-        """
-        
+            _print_slm_range_results(results)
     
     def time_weighting(self):
-        # TODO
-        pass
-    
+        """Ref: row 131 of excel 2250Asteroskopeio
+        """
+        ref_point_linearity_check = 94 # FIXED value
+        self.agilent3350A.set_frequency(1000.0, volt=2.0)
+        ref_attenuation = float(getText("What is the attenuator value when SLM reads %g (dB)?" % ref_point_linearity_check))
+        
+        #level_ranges = self.conf.get('level_ranges')
+        #upper_ref_level_range = level_ranges[0][0]
+        #lower_ref_level_range = level_ranges[0][1]
+        #results = []
+        #ref_atten = None
+        """
+        
+            wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
+                upper_ref_level_range, lower_ref_level_range, weighting))
+            
+            atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm))
+            if weighting == "A":
+                ref_atten = atten
+
+            uncertainty = 0.2
+                
+            results.append([weighting,])
+        """
+        # TODO attenuator value ???
+        
+        # FAST time weighting
+        results = []
+        for weighting in ["A", "C", "Z"]:
+            slm = float(getText("Please set your SLM to %s weighting and write your SLM value." % weighting))
+            deviation = ref_point_linearity_check - slm
+            uncertainty = 0.2
+            time_weighting_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            results.append([weighting,
+                            ref_point_linearity_check,
+                            slm,
+                            deviation,
+                            uncertainty,
+                            time_weighting_class])
+        
+        print("Time weighting F    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
+        print("                         (dB)               (dB)              (dB)          (dB)")
+        for row in results:
+            print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
+        
+        # SLOW time weighting
+        for weighting in ["A", "C", "Z"]:
+            slm = float(getText("Please set your SLM to %s weighting and write your SLM value." % weighting))
+            deviation = ref_point_linearity_check - slm
+            uncertainty = 0.2
+            time_weighting_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            results.append([weighting,
+                            ref_point_linearity_check,
+                            slm,
+                            deviation,
+                            uncertainty,
+                            time_weighting_class])
+        print("Time weighting S    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
+        print("                         (dB)               (dB)              (dB)          (dB)")
+        for row in results:
+            print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
+        
     def RMS_accuracy_and_overload(self):
-        # TODO ??
-        # Attenuator adjusted to an SLM Reading of 123 dB for the continuous signal
+        """Attenuator adjusted to an SLM Reading of X dB for the continuous signal
+        # X = ref upper range - 1
+        
+        # TODO level overload indication (positive half cycle)
+        # program Agilent to make a custom positive waveform
+        
+        # TODO level overload indication (negative half cycle)
+        # program Agilent to make a custom negative waveform.
+        # excel line 359.
+        
         # Attenuator reading = 9.06 dB
         # SLM reading = 123.28 dB
         # Nominal reading = 123 dB
@@ -426,6 +529,35 @@ class Script(threading.Thread):
         # Signal reduced by 1 dB    SLM Reading = 124.74 dB
         # Signal reduced by 3 dB    SLM Reading = 121.74 dB
         #     Nominal SLM Reading = 121.74 dB
+        # 
+        # attenuator increase step = 0.5 dB WARNING when we find overload, we should
+        # tune to the previous value
+        # then use step = 0.1 dB until the first indication of overload.
+        """
+        level_ranges = self.conf.get('level_ranges')
+        upper_ref_level_range = level_ranges[0][0]
+        lower_ref_level_range = level_ranges[0][1]
+        weighting = "A"
+        wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
+                upper_ref_level_range, lower_ref_level_range, weighting))
+        atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % 123))    # TODO
+        
+        # intial 139 using agilent 4 kHz normal waveform # save the atten value
+        
+        # switch to positive half cycle
+        # initial value SLM | atten | overload value SLM after tweaking atten | atten | diff SLM (dB) | uncertainty | class
+        #   136                    141
+        
+        # negative half cycle
+        # do the same as positive
+        
+        #while(True):
+            # TODO reduce attenuator ? How much?
+            # WRITE line atten value | SLM value
+            # WriTE line atten value | SLM value
+            # ... Overflow at SLM on value X. Step size?
+        
+        
         pass 
     
     def peak_response(self):
@@ -445,15 +577,17 @@ class Script(threading.Thread):
         # Nominal Reading = X dB
         pass
     
+    def tone_burst(self):
+        # continuous setting = LAF
+        # Fast setting = LAF MAX
+        # Slow setting = LAS MAX
+        # LA eq (equivalent)
+        pass
+    
     def pulse_range_SEL_and_overload(self):
         # TODO
         # 40 cycle bursts applied. Slm set to SEL and reset.
         # SLM reading = 70.05, 70.05, 70.05 dB
         
-        
         pass
-    
-    def _decide_class(self):
-        # TODO
-        return 1
         

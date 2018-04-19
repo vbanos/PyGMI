@@ -67,7 +67,7 @@ class Connect_Instrument():
         self.io.write(":rout:scan:int (@%d)" % channel)
         out = []
         for i in range(0, times):
-            out.append(parse_float(self.io.ask(":READ?")))
+            out.append(round(parse_float(self.io.ask(":READ?")), 5))
             time.sleep(interval)
         self.io.write(":rout:CLOSE (@%d)" % channel)
         return out
@@ -146,7 +146,9 @@ averaging to default settings."""
 ##(:INIT:CONT ON), sending this query may cause a –213, “Init ignored” error, but will still give
 ##a new reading.
     def query_voltage(self):
-        return float(self.io.ask(":READ?"))
+        tmp = self.io.ask(":READ?")
+        voltage = tmp.split(",")[0]
+        return float(voltage.replace("NVAC", ""))
     
     def query_latest_reading(self):
         """This command does not trigger a measurement. The command simply requests the last
