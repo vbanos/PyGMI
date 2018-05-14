@@ -10,6 +10,7 @@ from tkFileDialog import askopenfilename
 import tkMessageBox
 import winsound
 import yaml
+from pipes import stepkinds
 
 
 class Standard61672(object):
@@ -101,34 +102,30 @@ class selectMethods(object):
         self.linearity_chk = Checkbutton(self.root, text="Linearity", variable=self.linearity)
         self.linearity_chk.pack()
         
-        # 61672-3 Electrical Tests Par. 13 TODO change name to Frequency and time weighting
-        self.time_weighting = IntVar()
-        self.time_weighting_chk = Checkbutton(self.root, text="Time Weighting", variable=self.time_weighting)
-        self.time_weighting_chk.pack()
+        # 61672-3 Electrical Tests Par. 13
+        self.freq_time_weighting = IntVar()
+        self.freq_time_weighting_chk = Checkbutton(self.root, text="Frequency and Time Weighting",
+                                              variable=self.time_weighting)
+        self.freq_time_weighting_chk.pack()
         
-        # 61672-3 Electrical Tests Par. 18 TODO change name Overload indication    
-        self.rms_accuracy = IntVar()
-        self.rms_accuracy_chk = Checkbutton(self.root, text="RMS Accuracy", variable=self.rms_accuracy)
-        self.rms_accuracy_chk.pack()
+        # 61672-3 Electrical Tests Par. 18    
+        self.overload_indication = IntVar()
+        self.overload_indication_chk = Checkbutton(self.root, text="Overload Indication",
+                                                   variable=self.overload_indication)
+        self.overload_indication_chk.pack()
         
-        # # 61672-3 Electrical Tests Par. 17 TODO change name Peak C sound level
-        self.peak_response = IntVar()
-        self.peak_response_chk = Checkbutton(self.root, text="Peak Response", variable=self.peak_response)
-        self.peak_response_chk.pack()
+        # # 61672-3 Electrical Tests Par. 17
+        self.peak_C_sound_level = IntVar()
+        self.peak_C_sound_level_chk = Checkbutton(self.root, text="Peak C sound Level",
+                                                  variable=self.peak_C_sound_level)
+        self.peak_C_sound_level_chk.pack()
         
-        # 61672-3 Electrical Tests Par. 16 Tone burst response       
-        
-        
-        """
-        self.time_averaging = IntVar()
-        self.time_averaging_chk = Checkbutton(self.root, text="Time Averaging", variable=self.time_averaging)
-        self.time_averaging_chk.pack()
-        
-        self.pulse_range = IntVar()
-        self.pulse_range_chk = Checkbutton(self.root, text="Pulse Range SEL and Overload", variable=self.pulse_range)
-        self.pulse_range_chk.pack()
-        """
-        
+        # 61672-3 Electrical Tests Par. 16
+        self.toneburst_response = IntVar()
+        self.toneburst_response_chk = Checkbutton(self.roo, text="Toneburst response",
+                                                  variable=self.toneburst_response)
+        self.toneburst_response_chk.pack()
+                
         b = Button(self.root,text='OK',command=self.get_selection)
         b.pack(side='bottom')
 
@@ -139,9 +136,9 @@ class selectMethods(object):
         
         self.frequency_weighting_checked = 'selected' in self.frequency_weighting_chk.state()
         self.linearity_checked = 'selected' in self.linearity_chk.state()
-        self.time_weighting_checked = 'selected' in self.time_averaging_chk.state()
-        self.rms_accuracy_checked = 'selected' in self.rms_accuracy_chk.state()
-        self.peak_response_checked = 'selected' in self.peak_response_chk.state()
+        self.freq_time_weighting_checked = 'selected' in self.freq_time_averaging_chk.state()
+        self.overload_indication_checked = 'selected' in self.overload_indication_chk.state()
+        self.peak_C_sound_level_checked = 'selected' in self.peak_C_sound_level_chk.state()
         self.time_averaging_checked = 'selected' in self.time_averaging_chk.state()
         self.pulse_range_checked = 'selected' in self.pulse_range_chk.state()
         
@@ -154,6 +151,7 @@ class takeInput(object):
     """
     def __init__(self,requestMessage):
         self.root = Tk()
+        self.root.after(2000, lambda: self.e.focus_force())
         self.string = ''
         self.frame = Frame(self.root)
         self.frame.pack()        
@@ -197,7 +195,8 @@ def wait(msg):
     duration = 1000  # Set Duration To 1000 ms == 1 second
     winsound.Beep(frequency, duration)
     Tk().wm_withdraw() #to hide the main window
-    tkMessageBox.showinfo("Calibration",msg)
+    tkMessageBox.showinfo("Calibration", msg)
+
 
 ######create a separate thread to run the measurements without freezing the front panel######
 class Script(threading.Thread):
@@ -218,7 +217,6 @@ class Script(threading.Thread):
         #    self.GENERAL_CONF = yaml.load(stream)     
         #    #assert self.GENERAL_CONF.get('ITERATIONS')
         #    #assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
-
         m=self.mainapp              #a shortcut to the main app, especially the instruments
         f=self.frontpanel           #a shortcut to frontpanel values
         reserved_bus_access=self.GPIB_bus_lock     #a lock that reserves the access to the GPIB bus
@@ -248,6 +246,8 @@ class Script(threading.Thread):
         """Old standard
         """
         # TODO
+        
+        
         pass
     
     def run_61672_3(self):
@@ -260,27 +260,25 @@ class Script(threading.Thread):
             self.frequency_weightings()
         if options.linearity_checked:
             self.linearity()
-        if options.time_weighting_checked:
-            self.time_weighting()
-        if options.rms_accuracy_checked:
-            self.RMS_accuracy_and_overload()
-        if options.peak_response_checked:
-            self.peak_response()
-        if options.time_averaging_checked:
-            self.time_averaging()
-        if options.pulse_range_checked:
-            self.pulse_range_SEL_and_overload()      
+        if options.freq_time_weighting_checked:
+            self.freq_time_weighting()
+        if options.overload_indication_checked:
+            self.overload_indication()
+        if options.peak_C_sound_level_checked:
+            self.peak_C_sound_level()
+        if options.toneburst_response_checked:
+            self.toneburst_response()      
         print("END OF MEASUREMENTS")
         sys.exit(0)
         
         
     def frequency_weightings(self):
-        """TODO initial el100 value 94 is not fixed. It is calculated by SLM manual values.
+        """Initial el100 value is not fixed. It is calculated by SLM manual values.
         Max linearity range (e.g. 140) - 45 (fixed by standard 61672)
-        
         We run the frequency weighting 3 times (A, C, Z).
-        We do NOT change anything in our code/process, only SLM device settings change.
-        reference SPL comes from the manufacturer.
+        We do NOT change anything in our code/process, only SLM device settings
+        change.
+        Reference SPL comes from the manufacturer.
         """
         linear_operating_range = self.conf.get("linear_operating_range")
         self.agilent3350A.set_frequency(1000.0, volt=0.5)
@@ -319,24 +317,23 @@ class Script(threading.Thread):
                     row[0], row[1], row[2], row[3], row[4], row[5], row[6]))        
     
     def linearity(self):
-        """TODO the problem is that we need to set an ACPP value to get attenuator ~ 50+-10.
-        If we get initial attenuator value very low or high, there will a problem with other measurements.
-                                
-        2. tune attenuator until SPL = 99 (94 + 5) ... 
-                
-        uncertainty is fixed 0.2     
+        """1. The problem is that we need to set an ACPP value to get
+        attenuator ~50+-10.
+        If we get initial attenuator value very low or high, there will be
+        a problem with other measurements.
+        2. Tune attenuator until SPL = 99 (94 + 5) ...
+        Uncertainty is fixed 0.2
         
         COLUMNS
         Nominal SPL (dB)    Attn Setting (dB)    Diff ref  RefSPL    Nom Diff    Deviation    Uncertainty (dB) Class
         """
         linear_operating_range = self.conf.get('linear_operating_range')
-        linear_operating_range_lower = linear_operating_range.get('min')
+        range_lower = linear_operating_range.get('min')
         ref_point_linearity_check = 94 # FIXED value
-        linear_operating_range_upper = linear_operating_range.get('max')      
+        range_upper = linear_operating_range.get('max')      
         
         range_upper = range(ref_point_linearity_check, int(linear_operating_range_upper) - 4, 5) + \
                         range(int(linear_operating_range_upper) -4, int(linear_operating_range_upper) + 1)
-        
         range_lower = range(ref_point_linearity_check, int(linear_operating_range_lower) + 5, -5) + \
                         range(int(linear_operating_range_lower) + 5, int(linear_operating_range_lower) - 1)
         
@@ -446,8 +443,9 @@ class Script(threading.Thread):
         
             _print_slm_range_results(results)
     
-    def time_weighting(self):
-        """Ref: row 131 of excel 2250Asteroskopeio
+    def freq_time_weighting(self):
+        """ISO61672-3 Electrical Tests Par. 13
+        Ref: row 131 of excel 2250Asteroskopeio
         """
         ref_point_linearity_check = 94 # FIXED value
         self.agilent3350A.set_frequency(1000.0, volt=2.0)
@@ -509,13 +507,15 @@ class Script(threading.Thread):
         for row in results:
             print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
         
-    def RMS_accuracy_and_overload(self):
-        """Attenuator adjusted to an SLM Reading of X dB for the continuous signal
-        # X = ref upper range - 1
+    def overload_indication(self):
+        """ISO61672-3 Paragraph 18
+        least-sensitive level range with the sound level meter set to A-weighted time-average sound level.
         
-        # TODO level overload indication (positive half cycle)
+        
+        Attenuator adjusted to an SLM Reading of X dB for the continuous signal
+        # target_db = ref upper range - 1
+        # level overload indication (positive half cycle)
         # program Agilent to make a custom positive waveform
-        
         # TODO level overload indication (negative half cycle)
         # program Agilent to make a custom negative waveform.
         # excel line 359.
@@ -540,54 +540,74 @@ class Script(threading.Thread):
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
                 upper_ref_level_range, lower_ref_level_range, weighting))
-        atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % 123))    # TODO
+        self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
+        self.agilent3350A.positive_half_cycle() # TODO
+        slm_initial = upper_ref_level_range - 1
+        atten_positive = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm_initial))
         
-        # intial 139 using agilent 4 kHz normal waveform # save the atten value
-        
-        # switch to positive half cycle
-        # initial value SLM | atten | overload value SLM after tweaking atten | atten | diff SLM (dB) | uncertainty | class
-        #   136                    141
-        
-        # negative half cycle
-        # do the same as positive
-        
-        #while(True):
-            # TODO reduce attenuator ? How much?
-            # WRITE line atten value | SLM value
-            # WriTE line atten value | SLM value
-            # ... Overflow at SLM on value X. Step size?
-        
-        
-        pass 
+        # Positive one-half-cycle
+        step = 0.5
+        while(True):
+            atten = self.el100.get()
+            answer = getText("Do we have an overload in the Sound Level Meter? (y / n)").lower()
+            if answer == "y":
+                if step == 0.5:
+                    atten -= step
+                    step = 0.1
+                    logging.info("Switching to step 0.1")
+                elif step == 0.1:
+                    atten_overload = atten
+                    slm_overload = float(getText("What is the current SLM value?"))
+                    slm_diff = slm_overload - slm_initial
+                    uncertainty = 0  # TODO
+                    myclass = 0 # TODO
+                    print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
+                    print("   %.2f       %.2f        %.2f        %.2f       %.2f       %.2f       %d" % (
+                        slm_initial, atten_positive, slm_overload, atten_overload, slm_diff, uncertainty, myclass))
+                    break
+            atten += step
+                
+        # Negative one-half-cycle
+        # TODO the same as positive if its fine.  
     
-    def peak_response(self):
-        #TODO
-        pass
-    
-    def time_averaging(self):
+    def peak_C_sound_level(self):
+        """ISO61672-3 Paragraph 17
+        Only for C-weighted sound level
+        least-sensitive sound range
+        8khz SIN start and stop at zero crossings.
+        posive and negative half cycles of a 500 Hz sinusoid.
+        TODO cannot understand 17.3
+        """
+        level_ranges = self.conf.get('level_ranges')
+        upper_ref_level_range = level_ranges[0][0]
+        lower_ref_level_range = level_ranges[0][1]
+        weighting = "C"
+        wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
+                upper_ref_level_range, lower_ref_level_range, weighting))
+        self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
+        self.agilent3350A.positive_half_cycle() # TODO
+        
         # TODO
-        self.el100.set("31.8")
-        # function generator set to burst, Slm to Leq and attenuator adjusted by -30dB
-        self.el100.set("41.8")
-        # function generator set to burst, Slm to Leq and attenuator adjusted by -40dB
-        self.el100.set("76.25")
-        # channel 1 reconnected and adjusted to read 90 dB
-        # 40 cycle bursts applied, Slm set to Leq and reset
-        # SLM reading after 10s = X   Y    Z 
-        # Nominal Reading = X dB
-        pass
     
-    def tone_burst(self):
+    def toneburst_response(self):
+        """ISO61672-3 Electrical Tests Par. 16
+                        
         # continuous setting = LAF
         # Fast setting = LAF MAX
         # Slow setting = LAS MAX
         # LA eq (equivalent)
-        pass
+        """
+        level_ranges = self.conf.get('level_ranges')
+        upper_ref_level_range = level_ranges[0][0]
+        lower_ref_level_range = level_ranges[0][1]
+        weighting = "A"
+        wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
+                upper_ref_level_range, lower_ref_level_range, weighting))
     
-    def pulse_range_SEL_and_overload(self):
-        # TODO
-        # 40 cycle bursts applied. Slm set to SEL and reset.
-        # SLM reading = 70.05, 70.05, 70.05 dB
-        
-        pass
+        for setting in ("Fast (LAF MAX)", "Slow (LAS MAX)", "LA or equivalent"):
+            wait("Please use SLM setting %s" % setting)
+            self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
+            self.agilent3350A.start_burst() # TODO
+            # TODO
+            self.agilent3350A.stop_burst()  # TODO
         
