@@ -134,13 +134,14 @@ class Script(threading.Thread):
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
         SPL_standard = []
         SPL_device = []
-        for _ in range(self.GENERAL_CONF.get('ITERATIONS')):           
+        for cnt in range(self.GENERAL_CONF.get('ITERATIONS')):           
             self.stop_switch_instrument("Reference Standard")
             # delay time necessary for calibrator
             wait_time = self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
             res1 = self.measure_SPL("Reference Standard", v_pol=vpol1)
+            print("Step %d out of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
             self.print_current_result(res1)
             SPL_standard.append(res1)
             
@@ -148,6 +149,7 @@ class Script(threading.Thread):
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
             res2 = self.measure_SPL("Customer Device", v_pol=vpol1)
+            print("Step %d out of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
             self.print_current_result(res2) 
             SPL_device.append(res2)               
         
