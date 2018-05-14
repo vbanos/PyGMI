@@ -65,3 +65,9 @@ class Connect_Instrument():
         
     def stop_burst(self):
         self.io.write("BURS:STAT OFF")
+        
+    def positive_half_cycle(self):
+        print("TODO positive half cycle")
+        
+    def negative_half_cycle(self):
+        print("TODO negative half cycle")

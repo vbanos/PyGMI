@@ -47,3 +47,7 @@ class Connect_Instrument():
         c = int(c)
         values = range(112, 122)
         return chr(values[c])
+    
+    def get(self):
+        # TODO test this
+        return float(self.io.read().strip())

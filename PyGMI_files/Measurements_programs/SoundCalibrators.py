@@ -16,6 +16,7 @@ class takeInput(object):
     """
     def __init__(self,requestMessage):
         self.root = Tk()
+        self.root.after(2000, lambda: self.e.focus_force())
         self.string = ''
         self.frame = Frame(self.root)
         self.frame.pack()        
@@ -29,6 +30,7 @@ class takeInput(object):
         self.e = Entry(r,text='Name')
         self.e.pack(side='left')
         self.e.focus_set()
+        self.e.bind('<Return>', self.gettext)
         b = Button(r,text='okay',command=self.gettext)
         b.pack(side='right')
         self.root.bind('<Return>', self.gettext)
@@ -60,6 +62,7 @@ def wait(msg):
     winsound.Beep(frequency, duration)
     Tk().wm_withdraw() #to hide the main window
     tkMessageBox.showinfo("Calibration",msg)
+
 
 ######create a separate thread to run the measurements without freezing the front panel######
 class Script(threading.Thread):
@@ -129,22 +132,24 @@ class Script(threading.Thread):
         self.check_vpol(vpol1)
         
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
-        SPL_standard = SPL_device = []
+        SPL_standard = []
+        SPL_device = []
         for _ in range(self.GENERAL_CONF.get('ITERATIONS')):           
             self.stop_switch_instrument("Reference Standard")
             # delay time necessary for calibrator
             wait_time = self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
-            res = self.measure_SPL("Reference Standard", v_pol=vpol1)
-            self.print_current_result(res)
-            SPL_standard.append(res)
+            res1 = self.measure_SPL("Reference Standard", v_pol=vpol1)
+            self.print_current_result(res1)
+            SPL_standard.append(res1)
             
             self.stop_switch_instrument("Customer Device")
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
-            res = self.measure_SPL("Customer Device", v_pol=vpol1) 
-            SPL_device.append(res)               
+            res2 = self.measure_SPL("Customer Device", v_pol=vpol1)
+            self.print_current_result(res2) 
+            SPL_device.append(res2)               
         
         # final env conditions
         t2 = float(getText("Final temperature (oC)").strip())
@@ -546,7 +551,7 @@ class Script(threading.Thread):
         print("Reference Calibrator Type: %s Manufacturer: %s Serial Number: %s" % (
             ref_cal.get('type'), ref_cal.get('manufacturer'), ref_cal.get('serial_number')
             ))
-        customer_cal = self.REF_CALIBRATOR_CONF
+        customer_cal = self.CUSTOMER_CALIBRATOR_CONF
         print("Customer Calibrator Type: %s Manufacturer: %s Serial Number: %s" % (
             customer_cal.get('type'), customer_cal.get('manufacturer'), customer_cal.get('serial_number')))
         print("Customer Company: %s" % customer_cal.get('company'))
@@ -582,9 +587,11 @@ class Script(threading.Thread):
         print(v_test)    
         sys.exit(0)
         
+        """"
+        
     def debug_print(self):
-        """Use 0 values everywhere, try to debug the final report printout.
-        """
+        #Use 0 values everywhere, try to debug the final report printout.
+        
         self.end_datetime = datetime.now()
         env = dict(temperature=10.0, relative_humidity=10.0,
                    pressure=1000.0, polarising_voltage=100.0)
@@ -622,3 +629,4 @@ class Script(threading.Thread):
         device_uncertainty = standard_uncertainty
         self.print_results(env, SPL_standard, SPL_device, standard_uncertainty,
                            device_uncertainty)
+        """
