@@ -141,7 +141,7 @@ class Script(threading.Thread):
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
             res1 = self.measure_SPL("Reference Standard", v_pol=vpol1)
-            print("Step %d out of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
+            print("Step %d of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
             self.print_current_result(res1)
             SPL_standard.append(res1)
             
@@ -149,7 +149,7 @@ class Script(threading.Thread):
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
             res2 = self.measure_SPL("Customer Device", v_pol=vpol1)
-            print("Step %d out of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
+            print("Step %d of %d" % (cnt+1, self.GENERAL_CONF.get('ITERATIONS')))
             self.print_current_result(res2) 
             SPL_device.append(res2)               
         
@@ -210,7 +210,8 @@ class Script(threading.Thread):
         # atten#=100.0# - micsensitivity# - nomlevel#
         # micsensivity input variable by user (certificate). e.g. value = -26.49
         # calibrator nominal level e.g. value = 94
-        self.agilent3350A.turn_on()        
+        self.agilent3350A.turn_on()
+        self.agilent3350A.set_frequency(1000, 6.0)  
         atten = 100.0 - self.micsensitivity - self.calibrator_nominalevel
         good_consec = 0
         vins = 0.0

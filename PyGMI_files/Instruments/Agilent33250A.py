@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
+import time
 import visa
 
 # set logging output to stdout
@@ -26,22 +27,22 @@ class Connect_Instrument():
         logging.info("Ensure function generator provides zero output")
         # self.io.write("OUTP:LOAD MAX")
         self.io.write("OUTP:LOAD 50")
-        self.io.write("APPL:SIN 0.0, 0.0")
+        #self.io.write("APPL:SIN 0, 0, 0") THIS CREATES AN ERROR
         
         """REM set function generator output to 6V p-p, attenuator to first estimate"""
-        self.io.write("APPL:SIN 1.0E+3, 6.0")
-        self.io.write("OUTP ON")
+        # commented out because it breaks SLM tone burst measurement 2018-05-14
+        # self.io.write("APPL:SIN 1.0E+3, 6.0")
+        self.io.write("OUTP 1")
         
     def turn_off(self):
         logging.info("Ensure function generator provides zero output")
-        self.io.write("APPL:SIN 0.0, 0.0")
-        self.io.write("OUTP OFF")
+        self.io.write("OUTP 0")
 
     def set_frequency(self, freq, volt=0.0):
         logging.info("Set Agilent 33250A Frequency: %g", freq)
         self.io.write("APPL:SIN %g, %g" % (freq, volt))
         
-    def start_burst(self, burst_count):
+    def start_burst(self, freq, volt, delay, count):
         """Ref: Agilent 33250A manual
         Chapter 4 Remote Interface Reference, Burst Mode Commands, Page 187.
         
@@ -53,17 +54,25 @@ class Connect_Instrument():
         and dc is not allowed). For internally-triggered bursts, the minimum
         frequency is 2 mHz. For sine and square waveforms, frequencies above
         25 MHz are allowed only with an “infinite” burst count.
-        TODO
+        
+        ref: http://rfmw.em.keysight.com/spdhelpfiles/33500/webhelp/US/Content/__I_SCPI/BURSt_Subsystem.htm
         """
         logging.info("Generate a burst")
-        # BURS:MODE TRIGGERED
-        self.io.write("BURS:NCYC %d" % burst_count)
-        burst_period = 1    # range from 1μs to 500s
-        self.io.write("BURS:INT:PER %d" % burst_period) # TODO must be fixed to 0.25ms
-        self.io.write("BURS:PHAS %d" % 0) # ALWAYS 0
+        self.io.write("OUTP 0")
+        self.io.write("APPL:SIN %d,%g VPP, 0 V" % (freq, volt))
+        self.io.write("BURS:MODE TRIG")
+        self.io.write("TRIG:SOUR EXT")
+        self.io.write("BURS:NCYC %d" % count)  # number of cycles from excel
+        
+        # Useful only for INTERNAL TRIGGER, WE USE EXTERNAL 
+        #self.io.write("BURS:INT:PER %g" % period) # unit is seconds! 200ms, 2ms, 0.25ms
+        self.io.write("TRIG:DEL %g" % delay)
         self.io.write("BURS:STAT ON")
+        self.io.write("OUTP 1")
+        logging.info("burst started")
         
     def stop_burst(self):
+        time.sleep(2)
         self.io.write("BURS:STAT OFF")
         
     def positive_half_cycle(self):

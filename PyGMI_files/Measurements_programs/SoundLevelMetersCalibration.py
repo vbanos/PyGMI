@@ -10,7 +10,6 @@ from tkFileDialog import askopenfilename
 import tkMessageBox
 import winsound
 import yaml
-from pipes import stepkinds
 
 
 class Standard61672(object):
@@ -74,6 +73,7 @@ class Standard61672(object):
             return 2
         else:
             return 3
+
         
 class Standard60651(object):
     def frequency_weighting_tolerance_limits(self, frequency_weighting,
@@ -99,31 +99,31 @@ class selectMethods(object):
         
         # 61672-3 Electrical Tests Par. 14 & 15
         self.linearity = IntVar()
-        self.linearity_chk = Checkbutton(self.root, text="Linearity", variable=self.linearity)
+        self.linearity_chk = ttk.Checkbutton(self.root, text="Linearity", variable=self.linearity)
         self.linearity_chk.pack()
         
         # 61672-3 Electrical Tests Par. 13
         self.freq_time_weighting = IntVar()
-        self.freq_time_weighting_chk = Checkbutton(self.root, text="Frequency and Time Weighting",
-                                              variable=self.time_weighting)
+        self.freq_time_weighting_chk = ttk.Checkbutton(self.root, text="Frequency and Time Weighting",
+                                                       variable=self.freq_time_weighting)
         self.freq_time_weighting_chk.pack()
         
         # 61672-3 Electrical Tests Par. 18    
         self.overload_indication = IntVar()
-        self.overload_indication_chk = Checkbutton(self.root, text="Overload Indication",
-                                                   variable=self.overload_indication)
+        self.overload_indication_chk = ttk.Checkbutton(self.root, text="Overload Indication",
+                                                       variable=self.overload_indication)
         self.overload_indication_chk.pack()
         
         # # 61672-3 Electrical Tests Par. 17
         self.peak_C_sound_level = IntVar()
-        self.peak_C_sound_level_chk = Checkbutton(self.root, text="Peak C sound Level",
-                                                  variable=self.peak_C_sound_level)
+        self.peak_C_sound_level_chk = ttk.Checkbutton(self.root, text="Peak C sound Level",
+                                                      variable=self.peak_C_sound_level)
         self.peak_C_sound_level_chk.pack()
         
         # 61672-3 Electrical Tests Par. 16
         self.toneburst_response = IntVar()
-        self.toneburst_response_chk = Checkbutton(self.roo, text="Toneburst response",
-                                                  variable=self.toneburst_response)
+        self.toneburst_response_chk = ttk.Checkbutton(self.root, text="Toneburst response",
+                                                      variable=self.toneburst_response)
         self.toneburst_response_chk.pack()
                 
         b = Button(self.root,text='OK',command=self.get_selection)
@@ -136,11 +136,10 @@ class selectMethods(object):
         
         self.frequency_weighting_checked = 'selected' in self.frequency_weighting_chk.state()
         self.linearity_checked = 'selected' in self.linearity_chk.state()
-        self.freq_time_weighting_checked = 'selected' in self.freq_time_averaging_chk.state()
+        self.freq_time_weighting_checked = 'selected' in self.freq_time_weighting_chk.state()
         self.overload_indication_checked = 'selected' in self.overload_indication_chk.state()
         self.peak_C_sound_level_checked = 'selected' in self.peak_C_sound_level_chk.state()
-        self.time_averaging_checked = 'selected' in self.time_averaging_chk.state()
-        self.pulse_range_checked = 'selected' in self.pulse_range_chk.state()
+        self.toneburst_response_checked = 'selected' in self.toneburst_response_chk.state()
         
         self.root.withdraw()
         self.root.destroy()
@@ -233,7 +232,13 @@ class Script(threading.Thread):
         self.keithley2001 = m.instr_1   # GBIP0::16
         self.agilent3350A = m.instr_2   # GBIP0::20
         self.el100 = m.instr_3          # GBIP0::3
-                
+        
+        # DEBUG BURST            
+        # self.agilent3350A.turn_on()
+        # self.agilent3350A.start_burst(freq=4000, volt=0.1, delay=0.2, count=800)
+        # self.agilent3350A.stop_burst()
+               
+                                
         if self.conf.get("standard") == "60651":
             self.run_60651()        
         elif self.conf.get("standard") == "61672-3":
@@ -332,17 +337,17 @@ class Script(threading.Thread):
         ref_point_linearity_check = 94 # FIXED value
         range_upper = linear_operating_range.get('max')      
         
-        range_upper = range(ref_point_linearity_check, int(linear_operating_range_upper) - 4, 5) + \
-                        range(int(linear_operating_range_upper) -4, int(linear_operating_range_upper) + 1)
-        range_lower = range(ref_point_linearity_check, int(linear_operating_range_lower) + 5, -5) + \
-                        range(int(linear_operating_range_lower) + 5, int(linear_operating_range_lower) - 1)
+        range_upper = range(ref_point_linearity_check, int(range_upper) - 4, 5) + \
+                        range(int(range_upper) -4, int(range_upper) + 1)
+        range_lower = range(ref_point_linearity_check, int(range_lower) + 5, -5) + \
+                        range(int(range_lower) + 5, int(range_lower) - 1)
         
         logging.info("ranges")
         logging.info(range_lower)
         logging.info(range_upper)
 
         wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
-             linear_operating_range_lower,linear_operating_range_upper))
+             range_lower, range_upper))
         
         self.agilent3350A.set_frequency(self.conf.get('generator_frequency'),
                                         volt=self.conf.get('generator_voltage'))  # ACPP (peak to peak). TODO what is the correct volt value??
@@ -590,24 +595,100 @@ class Script(threading.Thread):
         # TODO
     
     def toneburst_response(self):
-        """ISO61672-3 Electrical Tests Par. 16
-                        
+        """ISO61672-3 Electrical Tests Par. 16      
         # continuous setting = LAF
         # Fast setting = LAF MAX
         # Slow setting = LAS MAX
         # LA eq (equivalent)
+        
+        Process:
+        1. Start agilent in normal mode and set volt to initial `generator_voltage` from conf.
+        2. Increase in small steps and check SLM value. The aim is to reach value = upper_level_range value - 3
+        (e.g. 140 - 3 = 137). Save the voltage and continue.
+        3. Enable burst mode (EXCEL 2250Asteroskopio3 ROW 310)        
         """
+        self.el100.set('00.00')
         level_ranges = self.conf.get('level_ranges')
         upper_ref_level_range = level_ranges[0][0]
         lower_ref_level_range = level_ranges[0][1]
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
-                upper_ref_level_range, lower_ref_level_range, weighting))
+             upper_ref_level_range, lower_ref_level_range, weighting))
     
-        for setting in ("Fast (LAF MAX)", "Slow (LAS MAX)", "LA or equivalent"):
-            wait("Please use SLM setting %s" % setting)
-            self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
+        volt_range = numpy.arange(0.05, 1.0, 0.05)
+    
+        volt_identified = self.conf.get('generator_voltage')
+        slm_aim = upper_ref_level_range - 3.0
+        for volt in volt_range:
+            self.agilent3350A.set_frequency(freq=4000, volt=volt)
+            slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)? The aim is to reach %g." % (volt, slm_aim)))
+            if slm_reading == slm_aim:
+                volt_identified = volt
+                self.agilent3350A.turn_off()
+                # TODO stop output of agilent
+                break          
+    
+        setting = "Fast (LAF MAX)"
+        opts = [dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
+                dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
+                dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)]
+        
+        fast_results = []
+        for opt in opts:
+            slm_results = []
+            slm_expected = slm_aim + opt['offset']
+            for _ in range(3):
+                wait("Please use SLM setting %s and reset instrument." % setting)    
+                self.agilent3350A.turn_on()
+                self.agilent3350A.start_burst(freq=4000, volt=volt_identified,
+                                              delay=opt['delay'], count=opt['cycles'])
+                self.agilent3350A.stop_burst()
+                self.agilent3350A.turn_off()
+                slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)? Expected value is %g." % (
+                                            volt, slm_expected)))
+                slm_results.append(slm_reading)
+            slm_avg = sum(slm_results) / len(slm_results)
+            slm_deviation = slm_avg - slm_expected
+            uncertainty = 0.2
+            if opt['min_tolerance'] <= slm_deviation <= opt['max_tolerance']:
+                myclass = 1
+            else:
+                myclass = 2 
+            
+            result = [opt['duration'], opt['cycles'], opt['offset'], slm_expected,
+                      slm_results[0], slm_results[1], slm_results[2], slm_avg,
+                      slm_deviation, uncertainty, myclass]
+            
+            fast_results.append(result)
+         
+        print("  Burst    Burst Cycles    LAFmax-LA   Expected    SLM    SLM    SLM   SLM   Deviation    Unc    Class")
+        print("Duration                  (IEC 61672-1              m1     m2     m3   avg")   
+        print("  (ms)         (N)         Table 3)      (dB)      (dB)   (dB)   (dB)  (dB)   (dB)       (dB)")
+        for r in fast_results:
+            print("%g        %g        %g        %g        %g    %g    %g    %g    %g        %g    %g" % (
+                  r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10]))
+    
+        """
+        setting = "Slow (LAS MAX)"
+        opts = [(200, 800), (2, 8)]
+        for i in range(2):
+            wait("Please use SLM setting %s and reset instrument." % setting)
+        
+        setting = "LA or equivalent"
+        opts = [dict(duration=0.2, cycles=800, min_tolerance=-0.8, max_tolerance=0.8),
+                dict(duration=0.002, cycles=8, min_tolerance=-3.3, max_tolerance=1.3)]
+                
+        for i in range(3):
+            wait("Please use SLM setting %s and reset instrument." % setting)
             self.agilent3350A.start_burst() # TODO
-            # TODO
             self.agilent3350A.stop_burst()  # TODO
+            # POPUP what is the SLM value?
+            # repeat this process for 3 times,then go to next time - cycles option.
+            
+            
+        opts = [dict(duration=0.2, cycles=800, min_tolerance=-0.8, max_tolerance=0.8),
+                dict(duration=0.002, cycles=8, min_tolerance=-1.8, max_tolerance=1.3),
+                dict(duration=0.00025, cycles=1, min_tolerance=-3.3, max_tolerance=1.3)]
+        """ 
+          
         
