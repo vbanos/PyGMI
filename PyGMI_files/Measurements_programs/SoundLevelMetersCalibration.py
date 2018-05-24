@@ -1,11 +1,7 @@
 import logging 
-import math
-import numpy
-import pprint
 import threading
 import time
 from Tkinter import *
-import ttk
 from tkFileDialog import askopenfilename
 import tkMessageBox
 import winsound
@@ -86,46 +82,34 @@ class Standard60651(object):
 # TODO accoustical signal Par. 11
 
 class selectMethods(object):
+    
     def __init__(self):
-        self.root = Tk()
-        self.frame = Frame(self.root)
-        self.frame.pack()
-        
-        # 61672-3 Electrical Tests Par. 12  
-        self.frequency_weighting = IntVar()
-        self.frequency_weighting_chk = ttk.Checkbutton(self.root, text="Frequency Weighting",
-                                                       variable=self.frequency_weighting)
-        self.frequency_weighting_chk.pack()
-        
-        # 61672-3 Electrical Tests Par. 14 & 15
-        self.linearity = IntVar()
-        self.linearity_chk = ttk.Checkbutton(self.root, text="Linearity", variable=self.linearity)
-        self.linearity_chk.pack()
-        
-        # 61672-3 Electrical Tests Par. 13
-        self.freq_time_weighting = IntVar()
-        self.freq_time_weighting_chk = ttk.Checkbutton(self.root, text="Frequency and Time Weighting",
-                                                       variable=self.freq_time_weighting)
-        self.freq_time_weighting_chk.pack()
-        
-        # 61672-3 Electrical Tests Par. 18    
-        self.overload_indication = IntVar()
-        self.overload_indication_chk = ttk.Checkbutton(self.root, text="Overload Indication",
-                                                       variable=self.overload_indication)
-        self.overload_indication_chk.pack()
-        
-        # # 61672-3 Electrical Tests Par. 17
-        self.peak_C_sound_level = IntVar()
-        self.peak_C_sound_level_chk = ttk.Checkbutton(self.root, text="Peak C sound Level",
-                                                      variable=self.peak_C_sound_level)
-        self.peak_C_sound_level_chk.pack()
-        
-        # 61672-3 Electrical Tests Par. 16
-        self.toneburst_response = IntVar()
-        self.toneburst_response_chk = ttk.Checkbutton(self.root, text="Toneburst response",
-                                                      variable=self.toneburst_response)
-        self.toneburst_response_chk.pack()
-                
+        self.root = Toplevel()
+          
+        self.frequency_weighting = BooleanVar()
+        chk1 = Checkbutton(self.root, text="Frequency Weighting (61672-3 Electrical Tests, Par.12)",
+                                              variable=self.frequency_weighting)
+        chk1.pack()
+        self.freq_time_weighting = BooleanVar()
+        chk2 = Checkbutton(self.root, text="Frequency and Time Weighting (61672-3 Electrical Tests, Par.13)",
+                           variable=self.freq_time_weighting)
+        chk2.pack()
+        self.linearity = BooleanVar()
+        chk3 = Checkbutton(self.root, text="Linearity (61672-3 Electrical Tests Par.14, 15)",
+                           variable=self.linearity)
+        chk3.pack()       
+        self.toneburst_response = BooleanVar()
+        chk4 = Checkbutton(self.root, text="Toneburst response (61672-3 Electrical Tests Par.16)",
+                           variable=self.toneburst_response)
+        chk4.pack()
+        self.peak_C_sound_level = BooleanVar()
+        chk5 = Checkbutton(self.root, text="Peak C sound Level (61672-3 Electrical Tests Par.17)",
+                           variable=self.peak_C_sound_level)
+        chk5.pack()
+        self.overload_indication = BooleanVar()
+        chk6 = Checkbutton(self.root, text="Overload Indication (61672-3 Electrical Tests Par.18)",
+                           variable=self.overload_indication)
+        chk6.pack()
         b = Button(self.root,text='OK',command=self.get_selection)
         b.pack(side='bottom')
 
@@ -133,14 +117,6 @@ class selectMethods(object):
         self.root.mainloop()
         
     def get_selection(self):
-        
-        self.frequency_weighting_checked = 'selected' in self.frequency_weighting_chk.state()
-        self.linearity_checked = 'selected' in self.linearity_chk.state()
-        self.freq_time_weighting_checked = 'selected' in self.freq_time_weighting_chk.state()
-        self.overload_indication_checked = 'selected' in self.overload_indication_chk.state()
-        self.peak_C_sound_level_checked = 'selected' in self.peak_C_sound_level_chk.state()
-        self.toneburst_response_checked = 'selected' in self.toneburst_response_chk.state()
-        
         self.root.withdraw()
         self.root.destroy()
         self.root.quit()
@@ -237,7 +213,6 @@ class Script(threading.Thread):
         # self.agilent3350A.turn_on()
         # self.agilent3350A.start_burst(freq=4000, volt=0.1, delay=0.2, count=800)
         # self.agilent3350A.stop_burst()
-               
                                 
         if self.conf.get("standard") == "60651":
             self.run_60651()        
@@ -252,30 +227,27 @@ class Script(threading.Thread):
         """
         # TODO
         
-        
         pass
     
     def run_61672_3(self):
         """New standard
         """
         options = selectMethods()
-        options.waitForInput()      
-                        
-        if options.frequency_weighting_checked:
+        options.waitForInput()                     
+        if options.frequency_weighting:
             self.frequency_weightings()
-        if options.linearity_checked:
+        if options.linearity:
             self.linearity()
-        if options.freq_time_weighting_checked:
+        if options.freq_time_weighting:
             self.freq_time_weighting()
-        if options.overload_indication_checked:
-            self.overload_indication()
-        if options.peak_C_sound_level_checked:
+        if options.overload_indication:
+            self.overload_indication_measurement()
+        if options.peak_C_sound_level:
             self.peak_C_sound_level()
-        if options.toneburst_response_checked:
-            self.toneburst_response()      
+        if options.toneburst_response:
+            self.toneburst_response()
         print("END OF MEASUREMENTS")
         sys.exit(0)
-        
         
     def frequency_weightings(self):
         """Initial el100 value is not fixed. It is calculated by SLM manual values.
@@ -455,27 +427,7 @@ class Script(threading.Thread):
         ref_point_linearity_check = 94 # FIXED value
         self.agilent3350A.set_frequency(1000.0, volt=2.0)
         ref_attenuation = float(getText("What is the attenuator value when SLM reads %g (dB)?" % ref_point_linearity_check))
-        
-        #level_ranges = self.conf.get('level_ranges')
-        #upper_ref_level_range = level_ranges[0][0]
-        #lower_ref_level_range = level_ranges[0][1]
-        #results = []
-        #ref_atten = None
-        """
-        
-            wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
-                upper_ref_level_range, lower_ref_level_range, weighting))
-            
-            atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm))
-            if weighting == "A":
-                ref_atten = atten
-
-            uncertainty = 0.2
                 
-            results.append([weighting,])
-        """
-        # TODO attenuator value ???
-        
         # FAST time weighting
         results = []
         for weighting in ["A", "C", "Z"]:
@@ -512,10 +464,9 @@ class Script(threading.Thread):
         for row in results:
             print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
         
-    def overload_indication(self):
+    def overload_indication_measurement(self):
         """ISO61672-3 Paragraph 18
         least-sensitive level range with the sound level meter set to A-weighted time-average sound level.
-        
         
         Attenuator adjusted to an SLM Reading of X dB for the continuous signal
         # target_db = ref upper range - 1
@@ -545,55 +496,141 @@ class Script(threading.Thread):
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
                 upper_ref_level_range, lower_ref_level_range, weighting))
-        self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
-        self.agilent3350A.positive_half_cycle() # TODO
+
         slm_initial = upper_ref_level_range - 1
+        self.agilent3350A.set_frequency(freq=4000, volt=0.5)
         atten_positive = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm_initial))
+        self.agilent3350A.turn_off()
         
-        # Positive one-half-cycle
-        step = 0.5
-        while(True):
-            atten = self.el100.get()
-            answer = getText("Do we have an overload in the Sound Level Meter? (y / n)").lower()
-            if answer == "y":
-                if step == 0.5:
-                    atten -= step
-                    step = 0.1
-                    logging.info("Switching to step 0.1")
-                elif step == 0.1:
-                    atten_overload = atten
-                    slm_overload = float(getText("What is the current SLM value?"))
-                    slm_diff = slm_overload - slm_initial
-                    uncertainty = 0  # TODO
-                    myclass = 0 # TODO
-                    print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
-                    print("   %.2f       %.2f        %.2f        %.2f       %.2f       %.2f       %d" % (
-                        slm_initial, atten_positive, slm_overload, atten_overload, slm_diff, uncertainty, myclass))
-                    break
-            atten += step
-                
-        # Negative one-half-cycle
-        # TODO the same as positive if its fine.  
+        # TODO problem
+        # Initially we have atten = 12.3 and SLM value = 119
+        # When we enable positive half cycle, we get overload ASAP
+        # So, we reduce atten to 11.8 and then start increasing by 0.1
+        # Finally we get overload atten value less than 12.3???
+        
+        def _measure():    
+            atten = atten_positive
+            step = 0.5
+            while(True):
+                answer = getText("Do we have an overload in the Sound Level Meter? (y / n)").lower()
+                if answer == "y":
+                    if step == 0.5:
+                        atten -= step
+                        step = 0.1
+                        logging.info("Switching to step 0.1")
+                    elif step == 0.1:
+                        atten_overload = atten
+                        slm_overload = float(getText("What is the current SLM value?"))
+                        slm_diff = slm_overload - slm_initial
+                        uncertainty = 0.2
+                        myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2
+                        return (slm_initial, atten_positive, slm_overload, atten_overload, slm_diff, uncertainty, myclass)                         
+                atten += step
+                self.el100.set("%05.2f" % atten)
+
+        self.agilent3350A.positive_half_cycle(freq=4000, volt=0.5)
+        all_results = []
+        row = _measure()
+        all_results.append(row)
+        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
+        print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f       %d" % (
+              row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+        self.agilent3350A.turn_off()
+        
+        self.agilent3350A.negative_half_cycle(freq=4000, volt=0.5)
+        row = _measure()
+        all_results.append(row)
+        self.agilent3350A.turn_off()
+        
+        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
+        for row in all_results:
+            print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f     %d" % (
+                  row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+  
     
     def peak_C_sound_level(self):
         """ISO61672-3 Paragraph 17
         Only for C-weighted sound level
         least-sensitive sound range
         8khz SIN start and stop at zero crossings.
-        posive and negative half cycles of a 500 Hz sinusoid.
+        positive and negative half cycles of a 500 Hz sinusoid.
         TODO cannot understand 17.3
         """
-        level_ranges = self.conf.get('level_ranges')
-        upper_ref_level_range = level_ranges[0][0]
-        lower_ref_level_range = level_ranges[0][1]
+        #level_ranges = self.conf.get('level_ranges')
+        #upper_ref_level_range = level_ranges[0][0]
+        #lower_ref_level_range = level_ranges[0][1]
+        upper_range = 120.0 # ? TODO
+        lower_range = 40.0  # ? TODO
         weighting = "C"
-        wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
-                upper_ref_level_range, lower_ref_level_range, weighting))
-        self.agilent3350A.set_frequency(freq=4000, volt=self.conf.get('generator_voltage'))
-        self.agilent3350A.positive_half_cycle() # TODO
+        wait("Please set your Sound Level Meter to %s weighting and the least sensitive level range (%g, %g)." % (
+             weighting, upper_range, lower_range))
         
-        # TODO
-    
+        target_slm = upper_range - 8.0      
+        
+        print("Peak C.    LCpeak-LC    Expected    SLM SLM  SLM    SLM    Deviation    Uncertainty    Class")
+        print("Response                  (dB)       m1  m2   m3    avg       (dB)          (dB)")
+        
+        def _measure_print(step, label, offset):
+            expected = target_slm + offset
+            row = [label, offset,  expected]
+            for _ in range(3):
+                if step == 1:
+                    self.agilent3350A.set_frequency(freq=8000, volt=0.1)
+                elif step == 2:
+                    self.agilent3350A.start_burst(freq=8000, volt=0.1, delay=0, count=1)
+                elif step == 3:
+                    self.agilent3350A.positive_half_cycle(freq=500, volt=0.1)
+                elif step == 4:
+                    self.agilent3350A.negative_half_cycle(freq=500, volt=0.1)
+                time.sleep(3)
+                slm_val = float(getText("What is the SLM value (dB)?"))
+                if step == 2:
+                    self.agilent3350A.stop_burst()
+                self.agilent3350A.turn_off()
+                row.append(slm_val)
+                wait("Please reset your SLM.")
+            slm_avg = (row[3] + row[4] + row[5]) / 3.0
+            row.append(slm_avg)
+            deviation = row[3] - row[2] # (SLM m1 - expected) ??? This seems wrong TODO check.
+            row.append(deviation)
+            row.append(0.2) # uncertainty
+            
+            if step == 1:
+                myclass = 1 if -1.4 < deviation < 1.4 else 2
+            elif step == 2:
+                myclass = 0
+            elif step == 3 or step == 4:
+                myclass = 1 if -2.4 < deviation < 2.4 else 2
+                    
+            row.append(myclass)
+            return row
+        
+        def _print_row(row):
+            print("%s    %g    %g    %g    %g    %g    %g    %g    %g    %d" % (
+                  row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
+                  row[8], row[9]))
+        
+        all_results = []
+        # Steady 8Khz
+        row = _measure_print(step=1, label="Steady 8Khz", offset=0.0)
+        all_results.append(row)
+        _print_row(row)
+        
+        # Burst with 1 cycle, 8Khz
+        row = _measure_print(step=2, label="1 cycle 8Khz", offset=3.4)       
+        all_results.append(row)
+        _print_row(row)
+        
+        # Positive half cycle 500Hz
+        row = _measure_print(step=3, label="Positive half cycle", offset=2.4)
+        all_results.append(row)
+        _print_row(row)
+                
+        # Negative half cycle 500Hz
+        row = _measure_print(step=4, label="Negative half cycle", offset=2.4)
+        all_results.append(row)
+        _print_row(row)
+        
     def toneburst_response(self):
         """ISO61672-3 Electrical Tests Par. 16      
         # continuous setting = LAF
@@ -614,81 +651,63 @@ class Script(threading.Thread):
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
              upper_ref_level_range, lower_ref_level_range, weighting))
-    
-        volt_range = numpy.arange(0.05, 1.0, 0.05)
-    
-        volt_identified = self.conf.get('generator_voltage')
+       
         slm_aim = upper_ref_level_range - 3.0
-        for volt in volt_range:
+        volt = 0.1
+        while True:
             self.agilent3350A.set_frequency(freq=4000, volt=volt)
-            slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)? The aim is to reach %g." % (volt, slm_aim)))
-            if slm_reading == slm_aim:
+            new_volt = float(getText("The aim is to reach SPM %g (dB). Voltage = %g. Please set a new voltage. Set 0 to save and continue." % (
+                                     slm_aim, volt)))
+            if new_volt == 0:
                 volt_identified = volt
                 self.agilent3350A.turn_off()
-                # TODO stop output of agilent
-                break          
-    
-        setting = "Fast (LAF MAX)"
-        opts = [dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
-                dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
-                dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)]
-        
-        fast_results = []
-        for opt in opts:
-            slm_results = []
-            slm_expected = slm_aim + opt['offset']
-            for _ in range(3):
-                wait("Please use SLM setting %s and reset instrument." % setting)    
-                self.agilent3350A.turn_on()
-                self.agilent3350A.start_burst(freq=4000, volt=volt_identified,
-                                              delay=opt['delay'], count=opt['cycles'])
-                self.agilent3350A.stop_burst()
-                self.agilent3350A.turn_off()
-                slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)? Expected value is %g." % (
-                                            volt, slm_expected)))
-                slm_results.append(slm_reading)
-            slm_avg = sum(slm_results) / len(slm_results)
-            slm_deviation = slm_avg - slm_expected
-            uncertainty = 0.2
-            if opt['min_tolerance'] <= slm_deviation <= opt['max_tolerance']:
-                myclass = 1
+                break       
             else:
-                myclass = 2 
-            
-            result = [opt['duration'], opt['cycles'], opt['offset'], slm_expected,
-                      slm_results[0], slm_results[1], slm_results[2], slm_avg,
-                      slm_deviation, uncertainty, myclass]
-            
-            fast_results.append(result)
-         
-        print("  Burst    Burst Cycles    LAFmax-LA   Expected    SLM    SLM    SLM   SLM   Deviation    Unc    Class")
-        print("Duration                  (IEC 61672-1              m1     m2     m3   avg")   
-        print("  (ms)         (N)         Table 3)      (dB)      (dB)   (dB)   (dB)  (dB)   (dB)       (dB)")
-        for r in fast_results:
-            print("%g        %g        %g        %g        %g    %g    %g    %g    %g        %g    %g" % (
-                  r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10]))
+                volt = new_volt   
     
-        """
-        setting = "Slow (LAS MAX)"
-        opts = [(200, 800), (2, 8)]
-        for i in range(2):
-            wait("Please use SLM setting %s and reset instrument." % setting)
+        runs = [dict(setting="Fast (LAF MAX)",
+                     opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
+                           dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
+                           dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)]),
+                dict(setting="Slow (LAF MAX)",
+                     opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
+                           dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3)]),
+                dict(setting="LA eq (equivalent)",
+                     opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
+                           dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
+                           dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)])]
         
-        setting = "LA or equivalent"
-        opts = [dict(duration=0.2, cycles=800, min_tolerance=-0.8, max_tolerance=0.8),
-                dict(duration=0.002, cycles=8, min_tolerance=-3.3, max_tolerance=1.3)]
-                
-        for i in range(3):
-            wait("Please use SLM setting %s and reset instrument." % setting)
-            self.agilent3350A.start_burst() # TODO
-            self.agilent3350A.stop_burst()  # TODO
-            # POPUP what is the SLM value?
-            # repeat this process for 3 times,then go to next time - cycles option.
+        for run in runs:
+            results = []
+            for opt in run['opts']:
+                slm_results = []
+                slm_expected = slm_aim + opt['offset']
+                for _ in range(3):
+                    wait("Please use SLM setting %s and reset instrument." % run['setting'])    
+                    self.agilent3350A.turn_on()
+                    self.agilent3350A.start_burst(freq=4000, volt=volt_identified,
+                                                  delay=opt['delay'], count=opt['cycles'])
+                    self.agilent3350A.stop_burst()
+                    self.agilent3350A.turn_off()
+                    slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)? Expected value is %g." % (
+                                                volt, slm_expected)))
+                    slm_results.append(slm_reading)
+                slm_avg = sum(slm_results) / len(slm_results)
+                slm_deviation = slm_avg - slm_expected
+                uncertainty = 0.2
+                if opt['min_tolerance'] <= slm_deviation <= opt['max_tolerance']:
+                    myclass = 1
+                else:
+                    myclass = 2           
+                result = [opt['delay'], opt['cycles'], opt['offset'], slm_expected,
+                          slm_results[0], slm_results[1], slm_results[2], slm_avg,
+                          slm_deviation, uncertainty, myclass]
+                results.append(result)
             
-            
-        opts = [dict(duration=0.2, cycles=800, min_tolerance=-0.8, max_tolerance=0.8),
-                dict(duration=0.002, cycles=8, min_tolerance=-1.8, max_tolerance=1.3),
-                dict(duration=0.00025, cycles=1, min_tolerance=-3.3, max_tolerance=1.3)]
-        """ 
-          
-        
+            print(run['setting']) 
+            print("Burst   Burst Cycles    LAFmax-LA   Expected    SLM    SLM    SLM   SLM   Deviation    Unc    Class")
+            print("Delay                  (IEC 61672-1              m1     m2     m3   avg")   
+            print("(ms)        (N)         Table 3)      (dB)      (dB)   (dB)   (dB)  (dB)   (dB)       (dB)")
+            for r in results:
+                print("%g       %g        %g        %g        %g    %g    %g    %g    %g        %g    %g" % (
+                      r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10]))
