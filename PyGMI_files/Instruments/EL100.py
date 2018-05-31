@@ -50,4 +50,4 @@ class Connect_Instrument():
     
     def get(self):
         # TODO test this
-        return float(self.io.read().strip())
+        return float(self.io.read())
