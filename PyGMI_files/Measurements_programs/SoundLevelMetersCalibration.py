@@ -1,84 +1,11 @@
 import logging 
 import threading
+import time
 from Tkinter import *
 from tkFileDialog import askopenfilename
 import tkMessageBox
 import winsound
 import yaml
-
-
-class Standard61672(object):
-    def frequency_weighting_tolerance_limits(self, frequency_weighting,
-                                             nominal_frequency, ref_spl,
-                                             measured_spl, windshiled_correction,
-                                             case_correction):
-        """ISO61672-1 IEC:2002, Table 2, Page 33.
-        Frequency_weighting = 'A', 'C' or 'Z'
-        NOTE that there is a standard uncertainty budget = 0.21
-        The final result will be 1, 2 or 3 (fail)
-        """
-        table_freq_weightings = {
-            1000.0: {"A": 0.0, "C": 0.0, "Z": 0.0},
-            2000.0: {"A": 1.2, "C": -0.2, "Z": 0.0},
-            4000.0: {"A": 1.0, "C": -0.8, "Z": 0.0},
-            8000.0: {"A": -1.1, "C": -3.0, "Z": 0.0},
-           12500.0: {"A": -4.3, "C": -6.2, "Z": 0.0},
-           16000.0: {"A": -6.6, "C": -8.5, "Z": 0.0},
-              31.5: {"A": -39.4, "C": -3.0, "Z": 0.0},
-              63.0: {"A": -26.2, "C": -0.8, "Z": 0.0},
-             125.0: {"A": -16.1, "C": -0.2, "Z": 0.0},
-             250.0: {"A": -8.6, "C": 0.0, "Z": 0.0},
-             500.0: {"A": -3.2, "C": 0.0, "Z": 0.0}
-        }
-        tolerance_limits = {
-            1000.0: {1: {"min":-1.1, "max": 1.1}, 2: {"min": -1.4, "max": 1.4}},
-            2000.0: {1: {"min":-1.6, "max": 1.6}, 2: {"min": -2.6, "max": 2.6}},
-            4000.0: {1: {"min":-1.6, "max": 1.6}, 2: {"min": -3.6, "max": 3.6}},
-            8000.0: {1: {"min":-3.1, "max": 2.1}, 2: {"min": -5.6, "max": 5.6}},
-           12500.0: {1: {"min":-6.0, "max": 3.0}, 2: {"min": -1000.0, "max": 6.0}},
-           16000.0: {1: {"min":-17.0, "max": 3.5}, 2: {"min": -1000.0, "max": 6.0}},
-              31.5: {1: {"min":-2.0, "max": 2.0}, 2: {"min": -3.5, "max": 3.5}},    
-              63.0: {1: {"min":-1.5, "max": 1.5}, 2: {"min": -2.5, "max": 2.5}},
-             125.0: {1: {"min":-1.5, "max": 1.5}, 2: {"min": -2.0, "max": 2.0}},
-             250.0: {1: {"min":-1.4, "max": 1.4}, 2: {"min": -1.9, "max": 1.9}},
-             500.0: {1: {"min":-1.4, "max": 1.4}, 2: {"min": -1.9, "max": 1.9}},
-            }
-        ref_spl += table_freq_weightings[nominal_frequency][frequency_weighting]
-        dif = round(measured_spl - ref_spl, 2) + windshiled_correction + case_correction
-        if(dif >= 0.0):
-            dif += 0.21
-        else:
-            dif -= 0.21
-        
-        if tolerance_limits[nominal_frequency][1]["min"] <= dif <= tolerance_limits[nominal_frequency][1]["max"]:
-            return 1
-        elif tolerance_limits[nominal_frequency][2]["min"] <= dif <= tolerance_limits[nominal_frequency][2]["max"]:
-            return 2
-        else:
-            return 3
-        
-    def linearity_tolerance_limits(self, deviation, uncertainty):
-        """Use to define the class in Linearity measurement. Ref: ISO paragraph 5.5.5.
-        Return 1, 2 or 3 (foul).
-        """
-        total = abs(deviation) + uncertainty
-        if total <= 1.1:
-            return 1
-        elif total <= 1.4:
-            return 2
-        else:
-            return 3
-
-        
-class Standard60651(object):
-    def frequency_weighting_tolerance_limits(self, frequency_weighting,
-                                             nominal_frequency, ref_spl,
-                                             measured_spl, windshiled_correction,
-                                             case_correction):
-        # TODO different tables than 60672
-        pass
-    
-# TODO accoustical signal Par. 11
 
 
 class BS780(object):
@@ -122,11 +49,65 @@ class BS780(object):
         """
         pass
 
-class selectMethods(object):
+class selectMethods60651(object):
+    """Display ISO60651 methods and select which ones to execute.
+    Also BS7580
+    """
+    def __init__(self):
+        self.root = Toplevel()
+        self.self_generated_noise_test = BooleanVar()
+        chk0 = Checkbutton(self.root, text="Self-generated Noise Test (5.5.2 BS7580, Part 1)",
+                           variable=self.self_generated_noise_test)
+        chk0.pack()
+        self.frequency_weighting = BooleanVar()
+        chk1 = Checkbutton(self.root, text="Frequency Weighting (Subclause 5.5.4 of BS7580: Part 1).",
+                           variable=self.frequency_weighting)
+        chk1.pack()
+        self.linearity = BooleanVar()
+        chk2 = Checkbutton(self.root, text="Linearity (Subclause 5.5.3 of BS 7580: Part 1).",
+                           variable=self.linearity)
+        chk2.pack()
+        self.time_weighting = BooleanVar()
+        chk3 = Checkbutton(self.root, text="Time Weighting (Subclause 5.5.5 and 5.5.8 of BS 7580: Part 1).",
+                           variable=self.time_weighting)
+        chk3.pack()
+        self.rms_accuracy_and_overload = BooleanVar()
+        chk4 = Checkbutton(self.root, text="RMS Accuracy and Overload (Subclauses 5.5.7 and 5.5.12 of BS 7580: Part 1).",
+                           variable=self.rms_accuracy_and_overload)
+        chk4.pack()
+        self.peak_response = BooleanVar()
+        chk5 = Checkbutton(self.root, text="Peak Response (Subclauses 5.5.6 of BS 7580: Part 1).",
+                           variable=self.peak_response)
+        chk5.pack()
+        self.time_averaging = BooleanVar()
+        chk6 = Checkbutton(self.root, text="Time Averaging (Subclauses 5.5.9 of BS 7580: Part 1).",
+                           variable=self.time_averaging)
+        chk6.pack()
+        self.pulse_range_sound_exposure_level_and_overload = BooleanVar()
+        chk7 = Checkbutton(self.root, text="Pulse Range Sound Exposure Level & Overload (Subclauses 5.5.10, 5.5.11 and 5.5.12 of BS 7580: Part 1).",
+                           variable=self.time_averaging)
+        chk7.pack()
+                
+        b = Button(self.root,text='OK',command=self.get_selection)
+        b.pack(side='bottom')
+
+    def waitForInput(self):
+        self.root.mainloop()
+        
+    def get_selection(self):
+        self.root.withdraw()
+        self.root.destroy()
+        self.root.quit()
+
+class selectMethods616723(object):
     """Display ISO61672-3 methods and select which ones to execute.
     """
     def __init__(self):
         self.root = Toplevel()
+        self.self_generated_noise_test = BooleanVar()
+        chk0 = Checkbutton(self.root, text="Self-generated Noise Test (5.5.2 BS7580, Part 1)",
+                           variable=self.self_generated_noise_test)
+        chk0.pack()
         self.frequency_weighting = BooleanVar()
         chk1 = Checkbutton(self.root, text="Frequency Weighting (61672-3 Electrical Tests, Par.12)",
                            variable=self.frequency_weighting)
@@ -182,7 +163,7 @@ class takeInput(object):
         self.e = Entry(r,text='Name')
         self.e.pack(side='left')
         self.e.focus_set()
-        b = Button(r,text='okay',command=self.gettext)
+        b = Button(r,text='OK',command=self.gettext)
         b.pack(side='right')
         
     def gettext(self, *args, **kwargs):
@@ -212,6 +193,18 @@ def wait(msg, title=None):
     Tk().wm_withdraw() #to hide the main window
     tkMessageBox.showinfo(title if title else "Calibration", msg)
 
+def linearity_tolerance_limits(deviation, uncertainty):
+    """Use to define the class in Linearity measurement.
+    Ref: ISO paragraph 5.5.5.
+    Return 1, 2 or 666 (foul).
+    """
+    total = abs(deviation) + uncertainty
+    if total <= 1.1:
+        return 1
+    elif total <= 1.4:
+        return 2
+    else:
+        return 666
 
 ######create a separate thread to run the measurements without freezing the front panel######
 class Script(threading.Thread):
@@ -240,26 +233,13 @@ class Script(threading.Thread):
         root = Tk()
         calibration_conf = askopenfilename(parent=root)
         with open(calibration_conf, 'r') as stream:
-            self.conf = yaml.load(stream)
-        
-        self.std61672 = Standard61672()
+            self.conf = yaml.load(stream)        
         
         logging.info("init all instruments")        
-        self.keithley2001 = m.instr_1   # GBIP0::16
-        self.agilent3350A = m.instr_2   # GBIP0::20
-        self.el100 = m.instr_3          # GBIP0::3
-        
-        # DEBUG BURST            yiannis 95.6
-        # 92.4
-        
-        
-        # volt=0.0087
-        # yiannis 95.5
-        # vangelis 95.4
-        #self.agilent3350A.start_burst(freq=8000, volt=0.0087, delay=0.0, count=1)
-        #self.agilent3350A.stop_burst()
-        #sys.exit(0)
-                                
+        self.keithley2001 = m.instr_1 # GBIP0::16
+        self.wgenerator = m.instr_2   # GBIP0::20 Agilent GBIP::10 Keysight
+        self.el100 = m.instr_3        # GBIP0::3
+                                        
         if self.conf.get("standard") == "60651":
             self.run_60651()        
         elif self.conf.get("standard") == "61672-3":
@@ -271,14 +251,47 @@ class Script(threading.Thread):
     def run_60651(self):
         """Old standard
         """
-        # TODO
-        pass
+        options = selectMethods60651()
+        options.waitForInput()
+        if options.self_generated_noise_test.get():
+            self.self_generated_noise_test()
+        if options.frequency_weighting.get():
+            self.frequency_weightings()
+            # TODO question: 60651 results have a PASS/FAIL column.
+            # This is the only difference between 60651 and 61672-3.
+        if options.linearity.get():
+            self.linearity()
+            # TODO question: 60651 results have a PASS/FAIL column.
+            # This is the only difference between 60651 and 61672-3.
+        if options.time_weighting.get():
+            # TODO self.time_weighting60651()
+            # 61672-3 has target SLM = max - 45 dB.
+            # 60651 has target 121 dB. Is this upper range value?
+            # What is the PASS/FAIL limit?
+            pass
+        if options.rms_accuracy_and_overload.get():
+            # TODO self.rms_accuracy_and_overload60651()
+            pass
+        if options.peak_response.get():
+            # TODO self.peak_response60651()
+            pass       
+        if options.time_averaging.get():
+            # TODO self.time_averaging60651()
+            pass
+        if options.pulse_range_sound_exposure_level_and_overload.get():
+            # TODO self.pulse_range_sound_exposure_level_and_overload60651()
+            pass            
+            
+        print("END OF MEASUREMENTS")
+        sys.exit(0)
     
     def run_61672_3(self):
         """New standard
         """
-        options = selectMethods()
-        options.waitForInput()                     
+        options = selectMethods616723()
+        options.waitForInput()
+        if options.self_generated_noise_test.get():
+            self.self_generated_noise_test()                
         if options.frequency_weighting.get():
             self.frequency_weightings()
         if options.linearity.get():
@@ -298,7 +311,7 @@ class Script(threading.Thread):
     def reset_instruments(self):
         """Called before and after every measurement
         """
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         self.el100.set("00.00")
         
     def frequency_weightings(self):
@@ -308,15 +321,55 @@ class Script(threading.Thread):
         We do NOT change anything in our code/process, only SLM device settings
         change.
         Reference SPL comes from the manufacturer.
+        
+        Use the same method for ISO 60651 and 61672-3.
         """
         self.reset_instruments()
+        self.el100.set("99.00")
         linear_operating_range = self.conf.get("linear_operating_range")
-        self.agilent3350A.set_frequency(1000.0, volt=0.5)
+        self.wgenerator.set_frequency(1000.0, volt=0.5)
+        self.wgenerator.turn_on()
         
         spl_aim = linear_operating_range.get("max") - 45
         
+        wait("Please set your Sound Level Meter to A weighting.")
+                        
         self.el100_ref_value = float(getText(
             "What is the attenuator value when SLM value is %g?" % spl_aim))    # TODO which SLM metric exactly? 
+        
+        print("Waveform Generator %g Hz, %g V, attenuator %g dB, SLM %g dB" % (
+              1000.0, 0.5, self.el100_ref_value, spl_aim))
+        
+        """ISO61672-1 IEC:2002, Table 2, Page 33.
+        Frequency_weighting = 'A', 'C' or 'Z'
+        NOTE that there is a standard uncertainty budget = 0.21
+        """
+        table_freq_weightings = {
+            1000.0: {"A": 0.0, "C": 0.0, "Z": 0.0},
+            2000.0: {"A": 1.2, "C": -0.2, "Z": 0.0},
+            4000.0: {"A": 1.0, "C": -0.8, "Z": 0.0},
+            8000.0: {"A": -1.1, "C": -3.0, "Z": 0.0},
+           12500.0: {"A": -4.3, "C": -6.2, "Z": 0.0},
+           16000.0: {"A": -6.6, "C": -8.5, "Z": 0.0},
+              31.5: {"A": -39.4, "C": -3.0, "Z": 0.0},
+              63.0: {"A": -26.2, "C": -0.8, "Z": 0.0},
+             125.0: {"A": -16.1, "C": -0.2, "Z": 0.0},
+             250.0: {"A": -8.6, "C": 0.0, "Z": 0.0},
+             500.0: {"A": -3.2, "C": 0.0, "Z": 0.0}
+        }
+        tolerance_limits = {
+            1000.0: {1: {"min":-1.1, "max": 1.1}, 2: {"min": -1.4, "max": 1.4}},
+            2000.0: {1: {"min":-1.6, "max": 1.6}, 2: {"min": -2.6, "max": 2.6}},
+            4000.0: {1: {"min":-1.6, "max": 1.6}, 2: {"min": -3.6, "max": 3.6}},
+            8000.0: {1: {"min":-3.1, "max": 2.1}, 2: {"min": -5.6, "max": 5.6}},
+           12500.0: {1: {"min":-6.0, "max": 3.0}, 2: {"min": -1000.0, "max": 6.0}},
+           16000.0: {1: {"min":-17.0, "max": 3.5}, 2: {"min": -1000.0, "max": 6.0}},
+              31.5: {1: {"min":-2.0, "max": 2.0}, 2: {"min": -3.5, "max": 3.5}},    
+              63.0: {1: {"min":-1.5, "max": 1.5}, 2: {"min": -2.5, "max": 2.5}},
+             125.0: {1: {"min":-1.5, "max": 1.5}, 2: {"min": -2.0, "max": 2.0}},
+             250.0: {1: {"min":-1.4, "max": 1.4}, 2: {"min": -1.9, "max": 1.9}},
+             500.0: {1: {"min":-1.4, "max": 1.4}, 2: {"min": -1.9, "max": 1.9}},
+            }
         
         frequencies = self.conf.get('frequencies')
         case_corrections = self.conf.get('case_corrections')
@@ -329,22 +382,34 @@ class Script(threading.Thread):
                 upper_ref_level_range, lower_ref_level_range, weighting))
             results = []
             for freq in frequencies:
-                self.agilent3350A.set_frequency(freq, volt=4.0)
+                self.wgenerator.set_frequency(freq, volt=0.5)
                 slm_reading = float(getText("Frequency = %g. What is the SLM reading (dB)?" % freq))    
                 overall_response = slm_reading + case_corrections[freq] + windshield_corrections[freq]
-                slm_class = self.std61672.frequency_weighting_tolerance_limits(
-                    weighting, freq, 95.0, slm_reading, windshield_corrections[freq], case_corrections[freq])    
+    
+                expected = spl_aim + table_freq_weightings[freq][weighting]
+                deviation = round(slm_reading - expected + windshield_corrections[freq] + case_corrections[freq], 2)
+                if(deviation >= 0.0):
+                    deviation += 0.21
+                else:
+                    deviation -= 0.21
+                if tolerance_limits[freq][1]["min"] <= deviation <= tolerance_limits[freq][1]["max"]:
+                    slm_class = 1
+                elif tolerance_limits[freq][2]["min"] <= deviation <= tolerance_limits[freq][2]["max"]:
+                    slm_class = 2
+                else:
+                    slm_class = 666
                 
-                row = [freq, self.el100_ref_value, slm_reading, windshield_corrections[freq], case_corrections[freq],
-                       overall_response, slm_class]
+                row = [freq, self.el100_ref_value, slm_reading, windshield_corrections[freq],
+                       case_corrections[freq], overall_response, expected, deviation, slm_class]
+                print(row)
                 results.append(row)
-        
+                
             print("Frequency Weighting %s Results" % weighting)
-            print("Frequency    Attn    Slm reading    Windshield corr    Case corr    Overall response    Class")
-            print("   (Hz)      (dB)       (dB)            (dB)              (dB)            (dB)")
+            print("Frequency    Attn    Slm reading    Windshield corr    Case corr    Overall response  Expected Deviation    Class")
+            print("   (Hz)      (dB)       (dB)             (dB)            (dB)            (dB)           (dB)     (dB)")
             for row in results:
-                print("%.1f      %.2f        %.2f          %.2f              %.2f            %.2f            %d" % (
-                    row[0], row[1], row[2], row[3], row[4], row[5], row[6]))        
+                print("%6.1f      %.2f       %.2f          %.2f            %.2f            %.2f        %.2f        %.2f       %d" % (
+                    row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]))        
         self.reset_instruments()
     
     def linearity(self):
@@ -355,31 +420,33 @@ class Script(threading.Thread):
         2. Tune attenuator until SPL = 99 (94 + 5) ...
         Uncertainty is fixed 0.2
         
+        Use the same method in 60651 and 61672-3. The only difference is the PASS/FAIL column.
+        
         COLUMNS
         Nominal SPL (dB)    Attn Setting (dB)    Diff ref  RefSPL    Nom Diff    Deviation    Uncertainty (dB) Class
         """
         wtitle = "Linearity (61672-3 Electrical Tests Par.14, 15)"
         self.reset_instruments()
         linear_operating_range = self.conf.get('linear_operating_range')
-        range_lower = linear_operating_range.get('min')
+        ref_range_lower = linear_operating_range.get('min')
         ref_point_linearity_check = 94 # FIXED value
-        range_upper = linear_operating_range.get('max')      
-        target_slm = range_upper
+        ref_range_upper = linear_operating_range.get('max')      
+        target_slm = ref_range_upper
         
-        range_upper = range(ref_point_linearity_check, int(range_upper) - 4, 5) + \
-                        range(int(range_upper) -4, int(range_upper) + 1)
-        range_lower = range(ref_point_linearity_check, int(range_lower) + 5, -5) + \
-                        range(int(range_lower) + 5, int(range_lower) - 1)
+        range_upper = range(ref_point_linearity_check, int(ref_range_upper) - 4, 5) + \
+                        range(int(ref_range_upper) -4, int(ref_range_upper) + 1)
+        range_lower = range(ref_point_linearity_check, int(ref_range_lower) + 5, -5) + \
+                        range(int(ref_range_lower) + 5, int(ref_range_lower) - 1)
         
         logging.info("ranges")
         logging.info(range_lower)
         logging.info(range_upper)
 
         wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
-             range_lower, range_upper))
+             ref_range_lower, ref_range_upper))
         
-        (target_volt, target_atten) = self._tune_agilent(8000, target_slm, wtitle)       
-        
+        (target_volt, target_atten) = self._tune_wgenerator(8000, target_slm, wtitle)       
+        self.wgenerator.turn_on()
         results = []
         for slm in range_upper:
             atten = float(getText("What is the attenuator value when SLM reads %g (dB)?" % slm))
@@ -391,7 +458,7 @@ class Script(threading.Thread):
             deviation = dif_ref_refspl - nom_dif
             voltage = self.keithley2001.query_voltage()
             uncertainty = 0.2
-            linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            linearity_class = linearity_tolerance_limits(deviation, uncertainty)
             results.append([atten, dif_ref_refspl, nom_dif, deviation, uncertainty, voltage, linearity_class])
             
         for slm in range_lower:
@@ -404,7 +471,7 @@ class Script(threading.Thread):
             deviation = dif_ref_refspl - nom_dif
             voltage = self.keithley2001.query_voltage()
             uncertainty = 0.2
-            linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            linearity_class = linearity_tolerance_limits(deviation, uncertainty)
             results.append([atten, dif_ref_refspl, nom_dif, deviation, uncertainty, voltage, linearity_class])
                        
         print("Linearity Test")
@@ -418,10 +485,9 @@ class Script(threading.Thread):
         Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
         Section 6.9, standard 61672-3 clause 15.2 15.3 15.4
         Note that agilent is already set to 8000 Hz and volt TODO ACPP
-        """
-        
-        # TODO find this with self._tune_agilent
-        self.agilent3350A.set_frequency(1000.0, volt=self.conf.get('generator_voltage'))
+        """       
+        (target_volt, target_atten) = self._tune_wgenerator(1000, target_slm, wtitle)
+        self.wgenerator.turn_on()       
         level_ranges = self.conf.get('level_ranges')
         if len(level_ranges) > 1:
             ref_atten = None
@@ -435,7 +501,7 @@ class Script(threading.Thread):
                     ref_slm = slm                    
                 deviation = ref_slm - slm
                 uncertainty = 0.2
-                linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+                linearity_class = linearity_tolerance_limits(deviation, uncertainty)
                 results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
                                 ref_slm,
                                 slm,
@@ -456,7 +522,8 @@ class Script(threading.Thread):
             Section 6.9, standard 61672-3 clause 15.4
             """
             results = []
-            self.agilent3350A.set_frequency(1000.0, volt=self.conf.get('generator_voltage'))
+            self.wgenerator.set_frequency(1000.0, volt=target_volt)
+            self.wgenerator.turn_on()
             ref_atten = float(getText("What is the attenuator value when SLM reads %g (dB) (upper limit - 5)?" % lrange[1] - 5))
             for lrange in level_ranges[1:]:
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (lrange[0], lrange[1]))
@@ -465,7 +532,7 @@ class Script(threading.Thread):
                     ref_slm = slm                    
                 deviation = ref_slm - slm
                 uncertainty = 0.2
-                linearity_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+                linearity_class = linearity_tolerance_limits(deviation, uncertainty)
                 results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
                                 ref_slm,
                                 slm,
@@ -483,18 +550,18 @@ class Script(threading.Thread):
         Ref: row 131 of excel 2250Asteroskopeio
         """
         self.reset_instruments()
-        
+        self.el100.set("99.00")
         ref_point_linearity_check = 94 # FIXED value
-        self.agilent3350A.set_frequency(1000.0, volt=2.0)
+        self.wgenerator.set_frequency(1000.0, volt=2.0)
         ref_attenuation = float(getText("What is the attenuator value when SLM reads %g (dB)?" % ref_point_linearity_check))
                 
         # FAST time weighting
         results = []
         for weighting in ["A", "C", "Z"]:
-            slm = float(getText("Please set your SLM to %s weighting and write your SLM value." % weighting))
+            slm = float(getText("Please set your SLM to %sF weighting and write your SLM value." % weighting))
             deviation = ref_point_linearity_check - slm
             uncertainty = 0.2
-            time_weighting_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            time_weighting_class = linearity_tolerance_limits(deviation, uncertainty)
             results.append([weighting,
                             ref_point_linearity_check,
                             slm,
@@ -505,14 +572,16 @@ class Script(threading.Thread):
         print("Time weighting F    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
         print("                         (dB)               (dB)              (dB)          (dB)")
         for row in results:
-            print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
+            print("%sF        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
         
+        
+        results = []
         # SLOW time weighting
         for weighting in ["A", "C", "Z"]:
-            slm = float(getText("Please set your SLM to %s weighting and write your SLM value." % weighting))
+            slm = float(getText("Please set your SLM to %sS weighting and write your SLM value." % weighting))
             deviation = ref_point_linearity_check - slm
             uncertainty = 0.2
-            time_weighting_class = self.std61672.linearity_tolerance_limits(deviation, uncertainty)
+            time_weighting_class = linearity_tolerance_limits(deviation, uncertainty)
             results.append([weighting,
                             ref_point_linearity_check,
                             slm,
@@ -522,7 +591,7 @@ class Script(threading.Thread):
         print("Time weighting S    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
         print("                         (dB)               (dB)              (dB)          (dB)")
         for row in results:
-            print("%s        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
+            print("%sS        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
         print("Attenuator value: %g" % ref_attenuation)
         self.reset_instruments()
 
@@ -562,15 +631,10 @@ class Script(threading.Thread):
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
              upper_range, lower_range, weighting), title=wtitle)
 
-        self.el100.set("20.00") # TODO must start with a high value and the decrease it
+        self.el100.set("20.00") # Must start with a high value and the decrease it
         slm_initial = upper_range - 1
-        self.agilent3350A.set_frequency(freq=4000, volt=0.1)
-        wait("Please tune first Agilent 33250A voltage and then El100 to achieve SLM %g. Press OK when ready." % slm_initial,
-             title=wtitle)
-        atten_positive = float(getText("What is the EL100 attenuator value (dB)?"))
-        target_volt = self.agilent3350A.get_voltage()
-        self.agilent3350A.turn_off()
-        
+        (target_volt, atten_positive) = self._tune_wgenerator(4000, slm_initial, wtitle)
+                
         def _measure():    
             atten = atten_positive
             step = 0.5
@@ -598,21 +662,21 @@ class Script(threading.Thread):
                     atten -= step
                 self.el100.set("%05.2f" % atten)
 
-        self.agilent3350A.positive_half_cycle(freq=4000, volt=target_volt/2.0)
+        self.wgenerator.positive_half_cycle(freq=4000, volt=target_volt/2.0)
         all_results = []
         row = _measure()
         all_results.append(row)
         print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
         print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f       %d" % (
               row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         
         # TODO SET attenuator initial found value
         
-        self.agilent3350A.negative_half_cycle(freq=4000, volt=target_volt/2.0)
+        self.wgenerator.negative_half_cycle(freq=4000, volt=target_volt/2.0)
         row = _measure()
         all_results.append(row)
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         
         print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
         for row in all_results:
@@ -653,16 +717,16 @@ class Script(threading.Thread):
             row = [label, offset,  expected]
             for _ in range(3):
                 if step == 1:
-                    self.agilent3350A.start_burst(freq=8000, volt=target_volt,
+                    self.wgenerator.start_burst(freq=8000, volt=target_volt,
                                                   delay=0, count=1)
                 elif step == 2:
-                    self.agilent3350A.positive_half_cycle(freq=500, volt=target_volt/2.0, # SOS
+                    self.wgenerator.positive_half_cycle(freq=500, volt=target_volt/2.0, # SOS
                                                           burst_count=1)
                 elif step == 3:
-                    self.agilent3350A.negative_half_cycle(freq=500, volt=target_volt/2.0, # SOS
+                    self.wgenerator.negative_half_cycle(freq=500, volt=target_volt/2.0, # SOS
                                                           burst_count=1)
-                self.agilent3350A.stop_burst()
-                self.agilent3350A.turn_off()
+                self.wgenerator.stop_burst()
+                self.wgenerator.turn_off()
                 slm_val = float(getText("What is the SLM LCpeakMax value (dB)?"))                    
                 row.append(slm_val)
                 wait("Please reset your SLM.")
@@ -687,14 +751,14 @@ class Script(threading.Thread):
         
         all_results = []
         # Steady 8Khz tuning
-        (target_volt, target_atten) = self._tune_agilent(8000, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(8000, target_slm, wtitle)
         print("Attenuator setting %g dB." % target_atten)
         
         # Steady 8Khz measurement
-        self.agilent3350A.set_frequency(freq=8000, volt=target_volt)
+        self.wgenerator.set_frequency(freq=8000, volt=target_volt)
         slm_val = float(getText("What is the SLM LCF value (dB)?"))
         print("Steady 8Khz    %g    %g" % (target_slm, slm_val))
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         wait("Please reset your SLM.")
         
         # Burst with 1 cycle, 8Khz
@@ -703,14 +767,14 @@ class Script(threading.Thread):
         _print_row(row)
         
         # Steady 500Hz tuning
-        (target_volt, target_atten) = self._tune_agilent(500, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(500, target_slm, wtitle)
         print("Attenuator setting %g dB." % target_atten)
         
         # Steady 500Hz measurement
-        self.agilent3350A.set_frequency(freq=500, volt=target_volt)
+        self.wgenerator.set_frequency(freq=500, volt=target_volt)
         slm_val = float(getText("What is the SLM LCF value (dB)?"))
         print("Steady 500Hz    %g    %g" % (target_slm, slm_val))
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         wait("Please reset your SLM.")
         
         # Positive half cycle 500Hz
@@ -742,7 +806,7 @@ class Script(threading.Thread):
        
         slm_aim = upper_ref_level_range - 3.0
         
-        (volt, atten) = self._tune_agilent(4000, slm_aim, wtitle)   
+        (volt, atten) = self._tune_wgenerator(4000, slm_aim, wtitle)   
     
         runs = [dict(setting="Fast (LAF MAX)",
                      opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
@@ -763,10 +827,10 @@ class Script(threading.Thread):
                 slm_expected = slm_aim + opt['offset']
                 for _ in range(3):
                     wait("Please use SLM setting %s and reset instrument." % run['setting'])    
-                    self.agilent3350A.start_burst(freq=4000, volt=volt,
+                    self.wgenerator.start_burst(freq=4000, volt=volt,
                                                   delay=opt['delay'], count=opt['cycles'])
-                    self.agilent3350A.stop_burst()
-                    self.agilent3350A.turn_off()
+                    self.wgenerator.stop_burst()
+                    self.wgenerator.turn_off()
                     slm_reading = float(getText("Voltage = %g. What is the SLM reading (dB)?" % volt))  # TODO which var?
                     slm_results.append(slm_reading)
                 slm_avg = sum(slm_results) / len(slm_results)
@@ -791,14 +855,36 @@ class Script(threading.Thread):
         
         self.reset_instruments()
         
-    def _tune_agilent(self, freq, target_slm, wtitle=None):
-        """Tune Agilent voltage using a given frequency to achieve a target SLM
-        measurement. Return voltage and attenuator values in a tuple.
+    def _tune_wgenerator(self, freq, target_slm, wtitle=None):
+        """Tune Waveform Generator (Keysight / Agilent) voltage using a given
+        frequency to achieve a target SLM measurement.
+        Return voltage and attenuator values in a tuple.
         """
-        self.agilent3350A.set_frequency(freq=freq, volt=0.001)
-        wait("Please tune first Agilent 33250A voltage and then EL100 to achieve SLM %g. Press OK when ready." % target_slm,
+        self.wgenerator.set_frequency(freq=freq, volt=0.001)
+        wait("Please tune first Waveform Generator voltage and then EL100 to achieve SLM %g. Press OK when ready." % target_slm,
              title=wtitle)
-        volt = self.agilent3350A.get_voltage()
+        volt = self.wgenerator.get_voltage()
         atten = float(getText("What is the EL100 attenuator value (dB)?"))
-        self.agilent3350A.turn_off()
+        self.wgenerator.turn_off()
         return (volt, atten)
+    
+    def self_generated_noise_test(self):
+        """Self-generated noise results BS7580, 5.5.2,  Part 1
+        # dummy capacitor tolerance is +-20% of the micophone capacitor value.
+        """
+        wtitle = "Self-generated noise test (5.5.2 BS7580, Part 1)"
+        wait("Please disconnect the microphone and connect the dummy transmitter (capacitator).",
+             title=wtitle)
+    
+        weightings = ["A", "C", "Lin Wide"]
+        for w in weightings:
+            wait("Please use %s weighting." % w)
+            res = []
+            for _ in range(3):
+                slm_val = float(getText("What is the SLM reading (dB)?",
+                                        title=wtitle))
+                res.append(slm_val)
+                time.sleep(3)
+            mean = (res[0] + res[1] + res[2]) / 3.0
+            print("%s weighting. SLM measurements: %g    %g    %g    mean = %g (dB)" % (
+                  w, res[0], res[1], res[2], mean))
