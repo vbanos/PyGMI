@@ -16,10 +16,13 @@ class Connect_Instrument():
         pass
         
     def set(self, value_str):
-        """Input value string is a float like: "12,34"
+        """Input value is string OR float with max value = 99.99 and min = 00.00
         Each number corresponds to a char (ref EL100 manual tables).
         We write these chars to the device configure it.
         """
+        if type(value_str) == float:
+            value_str = "%05.2f" % value_str
+        
         logging.info("SET EL100 VALUE %s", value_str)
         c1 = self._first_char(value_str[0])
         c2 = self._second_char(value_str[1])
@@ -49,5 +52,9 @@ class Connect_Instrument():
         return chr(values[c])
     
     def get(self):
-        # TODO test this
-        return float(self.io.read())
+        """Read value from EL100 is 2053 str.
+        We need to convert it to 20.53 float
+        """
+        raw = self.io.read_raw()
+        val = "%s.%s" % (raw[0:2], raw[2:4])              
+        return float(val)

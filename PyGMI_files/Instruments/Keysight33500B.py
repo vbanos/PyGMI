@@ -33,11 +33,17 @@ class Connect_Instrument():
         self.io.write("OUTP 0")
         time.sleep(1)
 
-    def set_frequency(self, freq, volt=0.0):
-        logging.info("Set Agilent 33250A Frequency: %g", freq)
-        self.io.write("APPL:SIN %g, %g" % (freq, volt))
+    def set_frequency(self, freq, volt=0.0, shape="SIN"):
+        logging.info("Set Agilent 33250A Frequency: %g shape: %s", freq, shape)
+        # self.io.write("FUNC:SHAP %s" % shape)
+        self.io.write("APPL:%s %g, %g" % (shape, freq, volt))      
         
-    def start_burst(self, freq, volt, delay, count):
+        # FUNCtion:SHAPe {SINusoid|SQUare|RAMP|USER} 
+        
+        # FUNCtion:SQUare:DCYCle {<percent>|MINimum|MAXimum} 
+
+        
+    def start_burst(self, freq, volt, delay, count, shape='SIN'):
         """Ref: Agilent 33250A manual
         Chapter 4 Remote Interface Reference, Burst Mode Commands, Page 187.
         
@@ -54,7 +60,7 @@ class Connect_Instrument():
         """
         # logging.info("Generate a burst with %d cycles and %g delay" % (count, delay))
         self.io.write("OUTP 0")
-        self.io.write("APPL:SIN %d,%g VPP, 0 V" % (freq, volt))
+        self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))
         self.io.write("BURS:MODE TRIG")
         self.io.write("TRIG:SOUR EXT")
         self.io.write("BURS:NCYC %d" % count)  # number of cycles from excel
