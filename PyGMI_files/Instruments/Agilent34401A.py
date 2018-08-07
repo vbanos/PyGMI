@@ -11,9 +11,9 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 class Connect_Instrument():
     """Potential values are: AC, DC.
     """
-    def __init__(self, VISA_address="GPIB0::20"):
+    def __init__(self, VISA_address="GPIB0::22"):
         self.io = visa.instrument(VISA_address)
-        logging.info("Init Agilent 3340 %s", self.io.ask("*IDN?"))
+        logging.info("Init Agilent 33401A %s", self.io.ask("*IDN?"))
         
     def initialize(self):
         """commands executed when the instrument is initialized"""
@@ -118,5 +118,10 @@ class Connect_Instrument():
         
     def get_voltage(self):
         self.io.write("VOLT?")
+        return float(self.io.read().strip())
+    
+    def read_resistance(self):
+        # 4W resistance (Ω)
+        self.io.write("MEAS:FRES?")
         return float(self.io.read().strip())
         

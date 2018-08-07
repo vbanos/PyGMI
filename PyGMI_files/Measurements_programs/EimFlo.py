@@ -87,33 +87,44 @@ class Script(threading.Thread):
         self.mensor = m.instr_1   # GBIP0::16
         self.agilent3340 = m.instr_2      # GBIP0::14
         
-        t1 = float(getText("Initial temperature (oC)").strip())
-        rh1 = float(getText("Initial humidity (%)").strip())
+        t1 = float(getText("Current temperature (oC)").strip())
+        rh1 = float(getText("Current humidity (%)").strip())
         
         results = []
         for flow in [100]:  # , 75, 45, 25, 15]:
             for iteration in [1,2,3]:
                 res = self.measure(flow, iteration)
                 results.append(res)
-        
-        # final env conditions
-        t2 = float(getText("Final temperature (oC)").strip())
-        rh2 = float(getText("Final humidity (%)").strip())
-               
+                               
         self.end_datetime = datetime.now()        
-        self.print_results(results)               
+        self.print_results(results, t1, rh1)
     
     def measure(self, flow, iteration):
         wait("ΠΑΡΟΧΗ %d ΕΠΑΝΑΛΗΨΗ %d" % (flow, iteration))
         
+        res_ohm = self.agilent3340.read_resistance()
+        res_oc = res_ohm + 1 # TODO conversion
+        
         return dict(flow=flow,
-                    iteration=iteration)
+                    iteration=iteration,
+                    res_ohm=res_ohm,
+                    res_oc=res_oc,
+                    pre=self.mensor.read())
     
-    def print_results(self, results):  
+    def print_results(self, results, t_env, rh_env):  
         """This is copied by the user to produce the final certificate.
         """
+        dif = self.end_datetime - self.start_datetime
+        s = dif.total_seconds()
+        dif_hours, remainder = divmod(s, 60)
+        dif_min, dif_sec = divmod(remainder, 60)
+        dif_str = "%02d:%02d:%02d" % (dif_hours, dif_min, dif_sec)
+        print("Έναρξη %s Λήξη %s Διάρκεια %s" % (
+            str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str ))
+        
+        print("Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env))
         print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. | ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ")
         print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) |                ")
         for li in results:
             print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  | " % (
-                li['flow'], li['iteration'], 0.0, 0.0, 0.0))
+                li['flow'], li['iteration'], li['res_ohm'], li['res_oc'], li['pre']))
