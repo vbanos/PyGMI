@@ -49,6 +49,49 @@ class takeInput(object):
     def waitForInput(self):
         self.root.mainloop()
 
+class TimerWindow(object):
+    def __init__(self):
+        self.t1 = 0.0
+        self.t2 = 0.0
+        self.duration = 0.0
+        
+        self.root = Tk()
+        self.frame = Frame(self.root)
+        self.frame.pack()
+        self.acceptInput()
+        self.root.after(1000, lambda: self.b1.focus_force())
+        
+    def acceptInput(self):
+        r = self.frame
+        k = Label(r,text="TIMER")
+        k.pack(side='left')
+        b1 = Button(r,text='Start',command=self.start)
+        b1.pack(side='right')
+        b1.focus_set()
+        self.k = k
+        b2 = Button(r, text='Stop', command=self.get_duration)
+        b2.pack(side='right')
+        
+    def start(self):
+        self.t1 = datetime.utcnow()
+        print("START", self.t1)
+        self.k.text = "Counter started"
+        
+    def stop(self):
+        self.t2 = datetime.utcnow()
+        print("STOP", self.t2)
+        self.duration = self.t2 - self.t1
+        
+    def waitForInput(self):
+        self.root.mainloop()
+    
+    def get_duration(self, event=None): 
+        self.stop() # stop counter and calculate duration
+        self.root.withdraw()
+        self.root.destroy()
+        self.root.quit()
+
+        
 def getText(requestMessage):
     msgBox = takeInput(requestMessage)
     #loop until the user makes a decision and the window is destroyed
@@ -85,31 +128,63 @@ class Script(threading.Thread):
         logging.info("init all instruments")
         m=self.mainapp        
         self.mensor = m.instr_1   # GBIP0::16
-        self.agilent3340 = m.instr_2      # GBIP0::14
+        self.agilent3340 = m.instr_2      # GBIP0::14      
         
         t1 = float(getText("Current temperature (oC)").strip())
         rh1 = float(getText("Current humidity (%)").strip())
+        pre = float(getText("Current pressure").strip())
         
         results = []
         for flow in [100]:  # , 75, 45, 25, 15]:
             for iteration in [1,2,3]:
-                res = self.measure(flow, iteration)
+                res = self.measure(flow, iteration, pre)
                 results.append(res)
                                
         self.end_datetime = datetime.now()        
         self.print_results(results, t1, rh1)
     
-    def measure(self, flow, iteration):
+    def _convert_ohm_oc(self, val, pre, b=-0.00000089049):
+        """Function from cell D46.
+        TODO ΑΦΟΥ μετράμε την πίεση σε κάθε iteration, γιατί έχουμε ένα
+        αρχικό ΠΕΡΙΒΑΛΛΟΝΤΙΚΕΣ ΣΥΝΘΗΚΕΣ; Να παίρνουμε το τρέχον.
+        """
+        return ((-99.98 * pre) + math.sqrt((99.98*pre)**2 - (4*99.98*b*(99.982-val)))) / (2*99.98*b) 
+    
+    def _convert_lpm_slpm(self, lpm, pre, res_oc):
+        """Function from cell J46.
+        """
+        return lpm * (pre/1013.25) * (293.15/(res_oc + 273.15) )
+    
+    def measure(self, flow, iteration, pre):
         wait("ΠΑΡΟΧΗ %d ΕΠΑΝΑΛΗΨΗ %d" % (flow, iteration))
-        
+         
         res_ohm = self.agilent3340.read_resistance()
-        res_oc = res_ohm + 1 # TODO conversion
+        res_oc = self._convert_ohm_oc(res_ohm, pre)
+        g_vol = {100: 100, 75: 100, 45: 100, 25: 50, 15: 50}
+        
+        tw = TimerWindow()
+        tw.waitForInput()
+        wait("DURATION %.2f sec" % tw.duration.total_seconds())
+        t_sec = tw.duration.total_seconds()
+        t_min = t_sec / 60.0
+        g_lpm = g_vol.get(flow) / t_min 
+        g_slpm = self._convert_lpm_slpm(g_lpm, pre, res_oc)
+        g_slpm_real = float(getText("Πραγματική Παροχή Gm(SLPM);").strip())
+        g_slpm_deviation = ((g_slpm - g_slpm_real) / g_slpm_real) * 100.0  
         
         return dict(flow=flow,
                     iteration=iteration,
                     res_ohm=res_ohm,
                     res_oc=res_oc,
-                    pre=self.mensor.read())
+                    pre=self.mensor.read(),
+                    vol=g_vol.get(flow),
+                    t_sec=t_sec,
+                    t_min=t_min,
+                    g_lpm=g_lpm,
+                    g_slpm=g_slpm,
+                    g_slpm_real=g_slpm_real,
+                    g_slpm_deviation=g_slpm_deviation
+                    )
     
     def print_results(self, results, t_env, rh_env):  
         """This is copied by the user to produce the final certificate.
@@ -123,8 +198,10 @@ class Script(threading.Thread):
             str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str ))
         
         print("Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env))
-        print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. | ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ")
-        print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) |                ")
+        print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. |             ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ             |   ΠΡΑΓΜΑΤΙΚΗ | ΑΠΟΚΛΙΣΗ")
+        print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) | V(L) | time | t(min) | G(LPM) | G(SLPM) | ΠΑΡ. Gm(SLPM)|    %")
         for li in results:
-            print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  | " % (
-                li['flow'], li['iteration'], li['res_ohm'], li['res_oc'], li['pre']))
+            print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  |  %d   | %.2f |  %.2f | %.2f | %.2f |  %.2f  |  %.2f" % (
+                li['flow'], li['iteration'], li['res_ohm'], li['res_oc'],
+                li['pre'], li['vol'], li['t_sec'], li['t_min'], li['g_lpm'],
+                li['g_slpm'], li['g_slpm_real'], li['g_slpm_deviation']))
