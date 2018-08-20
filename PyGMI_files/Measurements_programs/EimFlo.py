@@ -54,42 +54,56 @@ class TimerWindow(object):
         self.t1 = 0.0
         self.t2 = 0.0
         self.duration = 0.0
+        self.timer_running = False
         
         self.root = Tk()
         self.frame = Frame(self.root)
         self.frame.pack()
         self.acceptInput()
-        self.root.after(1000, lambda: self.b1.focus_force())
+        
         
     def acceptInput(self):
         r = self.frame
-        k = Label(r,text="TIMER")
-        k.pack(side='left')
+        
+        self.k = Label(r,text="TIMER")
+        self.k.pack(side='left')
+                
+        self.label = Label(r, text="")
+        self.label.pack()
+        
         b1 = Button(r,text='Start',command=self.start)
         b1.pack(side='right')
         b1.focus_set()
-        self.k = k
-        b2 = Button(r, text='Stop', command=self.get_duration)
+        
+        b2 = Button(r, text='Stop', command=self.stop)
         b2.pack(side='right')
         
     def start(self):
         self.t1 = datetime.utcnow()
-        print("START", self.t1)
         self.k.text = "Counter started"
+        self.timer_running = True
+        self.count_time()
         
     def stop(self):
+        # disable count_time and calculate time
+        self.count_time = lambda: True
         self.t2 = datetime.utcnow()
-        print("STOP", self.t2)
+        self.timer_running = False
         self.duration = self.t2 - self.t1
-        
-    def waitForInput(self):
-        self.root.mainloop()
-    
-    def get_duration(self, event=None): 
-        self.stop() # stop counter and calculate duration
+        # close window
         self.root.withdraw()
         self.root.destroy()
         self.root.quit()
+        
+    def count_time(self):
+        self.t2 = datetime.utcnow()
+        self.duration = self.t2 - self.t1
+        self.label.configure(text=self.duration)
+        if self.timer_running:   
+            self.frame.after(999, lambda: self.count_time())                          
+                    
+    def waitForInput(self):
+        self.root.mainloop()       
 
         
 def getText(requestMessage):
@@ -164,7 +178,6 @@ class Script(threading.Thread):
         
         tw = TimerWindow()
         tw.waitForInput()
-        wait("DURATION %.2f sec" % tw.duration.total_seconds())
         t_sec = tw.duration.total_seconds()
         t_min = t_sec / 60.0
         g_lpm = g_vol.get(flow) / t_min 
