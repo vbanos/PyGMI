@@ -50,16 +50,21 @@ class takeInput(object):
         self.root.mainloop()
 
 class TimerWindow(object):
-    def __init__(self):
+    def __init__(self, resistance_callback=None, pressure_callback=None):
         self.t1 = 0.0
         self.t2 = 0.0
         self.duration = 0.0
         self.timer_running = False
+        self.resistance_callback = resistance_callback
+        self.pressure_callback = pressure_callback
         
         self.root = Tk()
         self.frame = Frame(self.root)
         self.frame.pack()
         self.acceptInput()
+        
+        self.resistance_measurements = []
+        self.pressure_measurements = []
         
         
     def acceptInput(self):
@@ -100,7 +105,11 @@ class TimerWindow(object):
         self.duration = self.t2 - self.t1
         self.label.configure(text=self.duration)
         if self.timer_running:   
-            self.frame.after(999, lambda: self.count_time())                          
+            self.frame.after(999, lambda: self.count_time())
+        res = self.resistance_callback()
+        self.resistance_measurements.append(res)
+        pre = self.pressure_callback()
+        self.pressure_measurements.append(pre)        
                     
     def waitForInput(self):
         self.root.mainloop()       
@@ -170,14 +179,18 @@ class Script(threading.Thread):
         return lpm * (pre/1013.25) * (293.15/(res_oc + 273.15) )
     
     def measure(self, flow, iteration, pre):
-        wait("ΠΑΡΟΧΗ %d ΕΠΑΝΑΛΗΨΗ %d" % (flow, iteration))
-         
-        res_ohm = self.agilent3340.read_resistance()
-        res_oc = self._convert_ohm_oc(res_ohm, pre)
+        wait("ΠΑΡΟΧΗ %d ΕΠΑΝΑΛΗΨΗ %d" % (flow, iteration))        
+        
         g_vol = {100: 100, 75: 100, 45: 100, 25: 50, 15: 50}
         
-        tw = TimerWindow()
+        tw = TimerWindow(resistance_callback=self.agilent3340.read_resistance,
+                         pressure_callback=self.mensor.read)
         tw.waitForInput()
+        
+        res_ohm = sum(tw.resistance_measurements) / len(tw.resistance_measurements)
+        res_oc = self._convert_ohm_oc(res_ohm, pre)
+        res_pre = sum(tw.pressure_measurements) / len(tw.pressure_measurements)
+                
         t_sec = tw.duration.total_seconds()
         t_min = t_sec / 60.0
         g_lpm = g_vol.get(flow) / t_min 
@@ -189,7 +202,7 @@ class Script(threading.Thread):
                     iteration=iteration,
                     res_ohm=res_ohm,
                     res_oc=res_oc,
-                    pre=self.mensor.read(),
+                    pre=res_pre,
                     vol=g_vol.get(flow),
                     t_sec=t_sec,
                     t_min=t_min,
