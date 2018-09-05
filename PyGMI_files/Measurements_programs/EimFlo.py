@@ -16,20 +16,20 @@ from _hotshot import resolution
 class takeInput(object):
     """Utility class to show popup and get user input string.
     """
-    def __init__(self,requestMessage):
+    def __init__(self,requestMessage, default_value=""):
         self.root = Tk()
         self.root.after(2000, lambda: self.e.focus_force())
         self.string = ''
         self.frame = Frame(self.root)
         self.frame.pack()        
-        self.acceptInput(requestMessage)
+        self.acceptInput(requestMessage, default_value)
 
-    def acceptInput(self,requestMessage):
+    def acceptInput(self,requestMessage, default_value):
         r = self.frame
-
         k = Label(r,text=requestMessage)
         k.pack(side='left')
         self.e = Entry(r,text='Name')
+        self.e.insert(END, default_value)
         self.e.pack(side='left')
         self.e.focus_set()
         self.e.bind('<Return>', self.gettext)
@@ -101,22 +101,26 @@ class TimerWindow(object):
         self.root.quit()
         
     def count_time(self):
+        """Record pressure and resistance values every 10''.
+        """
         self.t2 = datetime.utcnow()
         self.duration = self.t2 - self.t1
-        self.label.configure(text=self.duration)
+        self.label.configure(text="%.4f" % self.duration.total_seconds())
         if self.timer_running:   
             self.frame.after(999, lambda: self.count_time())
-        res = self.resistance_callback()
-        self.resistance_measurements.append(res)
-        pre = self.pressure_callback()
-        self.pressure_measurements.append(pre)        
+        sec = round(self.duration.total_seconds())
+        if sec == 0 or sec % 10 == 0:
+            res = self.resistance_callback()
+            self.resistance_measurements.append(res)
+            pre = self.pressure_callback()
+            self.pressure_measurements.append(pre)        
                     
     def waitForInput(self):
         self.root.mainloop()       
 
         
-def getText(requestMessage):
-    msgBox = takeInput(requestMessage)
+def getText(requestMessage, default_value=""):
+    msgBox = takeInput(requestMessage, default_value=default_value)
     #loop until the user makes a decision and the window is destroyed
     msgBox.waitForInput()
     msg = msgBox.getString()   
@@ -143,6 +147,11 @@ class Script(threading.Thread):
         self.stop_flag=stop_flag
         self.GPIB_bus_lock=GPIB_bus_lock
         
+        # STATIC variables that may change after equipment calibration.
+        self.a = 0.00392
+        self.b = -0.00000089049
+        self.r = 99.98
+        
     def run(self):
         """General configuration is loaded from C:\acoustics-configuration\general.yaml 
         """
@@ -157,32 +166,45 @@ class Script(threading.Thread):
         rh1 = float(getText("Current humidity (%)").strip())
         pre = float(getText("Current pressure").strip())
         
+        # Flows used in calibration are user-defined.
+        flows_str = getText("Calibration flows (comma separated values)",
+                            default_value="100,75,45,25,15").strip()
+        flows = [int(fl.strip()) for fl in flows_str.split(",")]
+        flow_unit = getText("Flow measurement unit (LPM, LPH, M3H)", default_value="LPM")
         results = []
-        for flow in [100]:  # , 75, 45, 25, 15]:
+        for flow in flows:
+            wait("Flow = %d %s. Flow Adjustment in progress. Please press OK when ready." % (
+                flow, flow_unit))
+            vol = float(getText("Volume").strip())
             for iteration in [1,2,3]:
-                res = self.measure(flow, iteration, pre)
-                results.append(res)
+                while True:
+                    line = self.measure(flow, flow_unit, vol, iteration, pre)
+                    self._print_headers()
+                    self._print_line(line)
+                    confirm = getText("Deviation %.2f. Please type \"yes\" to continue or leave empty to repeat" % line['g_slpm_deviation'],
+                                      default_value="yes")
+                    if confirm == "yes":        
+                        results.append(line)
+                        break
                                
         self.end_datetime = datetime.now()        
         self.print_results(results, t1, rh1)
     
-    def _convert_ohm_oc(self, val, pre, b=-0.00000089049):
+    def _convert_ohm_oc(self, val, pre):
         """Function from cell D46.
-        TODO ΑΦΟΥ μετράμε την πίεση σε κάθε iteration, γιατί έχουμε ένα
-        αρχικό ΠΕΡΙΒΑΛΛΟΝΤΙΚΕΣ ΣΥΝΘΗΚΕΣ; Να παίρνουμε το τρέχον.
-        """
-        return ((-99.98 * pre) + math.sqrt((99.98*pre)**2 - (4*99.98*b*(99.982-val)))) / (2*99.98*b) 
+        """        
+        nom = (-self.r * pre) + math.sqrt(self.r*pre)**2 - (4.0*self.r*self.b*(self.r-val))
+        denom = (2.0*self.r*self.b)
+        return nom / denom 
     
     def _convert_lpm_slpm(self, lpm, pre, res_oc):
         """Function from cell J46.
         """
         return lpm * (pre/1013.25) * (293.15/(res_oc + 273.15) )
     
-    def measure(self, flow, iteration, pre):
-        wait("ΠΑΡΟΧΗ %d ΕΠΑΝΑΛΗΨΗ %d" % (flow, iteration))        
-        
-        g_vol = {100: 100, 75: 100, 45: 100, 25: 50, 15: 50}
-        
+    def measure(self, flow, flow_unit, vol, iteration, pre):
+        wait("Flow %d %s Run %d/3" % (flow, flow_unit, iteration))        
+             
         tw = TimerWindow(resistance_callback=self.agilent3340.read_resistance,
                          pressure_callback=self.mensor.read)
         tw.waitForInput()
@@ -193,9 +215,9 @@ class Script(threading.Thread):
                 
         t_sec = tw.duration.total_seconds()
         t_min = t_sec / 60.0
-        g_lpm = g_vol.get(flow) / t_min 
+        g_lpm = vol / t_min 
         g_slpm = self._convert_lpm_slpm(g_lpm, pre, res_oc)
-        g_slpm_real = float(getText("Πραγματική Παροχή Gm(SLPM);").strip())
+        g_slpm_real = float(getText("Real Flow Gm(SLPM);").strip())
         g_slpm_deviation = ((g_slpm - g_slpm_real) / g_slpm_real) * 100.0  
         
         return dict(flow=flow,
@@ -203,7 +225,7 @@ class Script(threading.Thread):
                     res_ohm=res_ohm,
                     res_oc=res_oc,
                     pre=res_pre,
-                    vol=g_vol.get(flow),
+                    vol=vol,
                     t_sec=t_sec,
                     t_min=t_min,
                     g_lpm=g_lpm,
@@ -211,6 +233,16 @@ class Script(threading.Thread):
                     g_slpm_real=g_slpm_real,
                     g_slpm_deviation=g_slpm_deviation
                     )
+    
+    def _print_headers(self):
+        print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. |             ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ             |   ΠΡΑΓΜΑΤΙΚΗ | ΑΠΟΚΛΙΣΗ")
+        print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) | V(L) | time | t(min) | G(LPM) | G(SLPM) | ΠΑΡ. Gm(SLPM)|    %")
+    
+    def _print_line(self, li):
+        print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  |  %d   | %.4f |  %.2f | %.2f | %.2f |  %.2f  |  %.2f" % (
+            li['flow'], li['iteration'], li['res_ohm'], li['res_oc'], li['pre'],
+            li['vol'], li['t_sec'], li['t_min'], li['g_lpm'], li['g_slpm'],
+            li['g_slpm_real'], li['g_slpm_deviation']))
     
     def print_results(self, results, t_env, rh_env):  
         """This is copied by the user to produce the final certificate.
@@ -224,10 +256,6 @@ class Script(threading.Thread):
             str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str ))
         
         print("Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env))
-        print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. |             ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ             |   ΠΡΑΓΜΑΤΙΚΗ | ΑΠΟΚΛΙΣΗ")
-        print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) | V(L) | time | t(min) | G(LPM) | G(SLPM) | ΠΑΡ. Gm(SLPM)|    %")
+        self._print_headers()
         for li in results:
-            print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  |  %d   | %.2f |  %.2f | %.2f | %.2f |  %.2f  |  %.2f" % (
-                li['flow'], li['iteration'], li['res_ohm'], li['res_oc'],
-                li['pre'], li['vol'], li['t_sec'], li['t_min'], li['g_lpm'],
-                li['g_slpm'], li['g_slpm_real'], li['g_slpm_deviation']))
+            self._print_line(li)
