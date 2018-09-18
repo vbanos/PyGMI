@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-
+import csv
 import logging 
 import math
 import numpy
 import threading
 import time
+from tabulate import tabulate
 from Tkinter import *
 import tkMessageBox
 import winsound
@@ -148,19 +149,23 @@ class Script(threading.Thread):
         self.GPIB_bus_lock=GPIB_bus_lock
         
         # STATIC variables that may change after equipment calibration.
-        self.a = 0.00392
+        self.a = 0.0039272
         self.b = -0.00000089049
         self.r = 99.98
         
     def run(self):
         """General configuration is loaded from C:\acoustics-configuration\general.yaml 
-        """
+        """        
         self.start_datetime = datetime.now()
-                        
+              
         logging.info("init all instruments")
         m=self.mainapp        
         self.mensor = m.instr_1   # GBIP0::16
         self.agilent3340 = m.instr_2      # GBIP0::14      
+        
+        customer = getText("Πελάτης")
+        instrument = getText("Όργανο")
+        serial_number = getText("Σεριακός Αριθμός")
         
         t1 = float(getText("Current temperature (oC)").strip())
         rh1 = float(getText("Current humidity (%)").strip())
@@ -179,8 +184,8 @@ class Script(threading.Thread):
             for iteration in [1,2,3]:
                 while True:
                     line = self.measure(flow, flow_unit, vol, iteration, pre)
-                    self._print_headers()
-                    self._print_line(line)
+                    out = [self._format_line(line)]
+                    print(tabulate(out, headers=self.headers))
                     confirm = getText("Deviation %.2f. Please type \"yes\" to continue or leave empty to repeat" % line['g_slpm_deviation'],
                                       default_value="yes")
                     if confirm == "yes":        
@@ -188,13 +193,13 @@ class Script(threading.Thread):
                         break
                                
         self.end_datetime = datetime.now()        
-        self.print_results(results, t1, rh1)
+        self.print_results(results, t1, rh1, customer, instrument, serial_number)
     
-    def _convert_ohm_oc(self, val, pre):
+    def _convert_ohm_oc(self, val):
         """Function from cell D46.
         """        
-        nom = (-self.r * pre) + math.sqrt(self.r*pre)**2 - (4.0*self.r*self.b*(self.r-val))
-        denom = (2.0*self.r*self.b)
+        nom = (-self.r * self.a) + math.sqrt((self.r*self.a)**2 - (4.0*self.r*self.b*(self.r-val)))
+        denom = (2.0*self.r*self.b)        
         return nom / denom 
     
     def _convert_lpm_slpm(self, lpm, pre, res_oc):
@@ -210,7 +215,7 @@ class Script(threading.Thread):
         tw.waitForInput()
         
         res_ohm = sum(tw.resistance_measurements) / len(tw.resistance_measurements)
-        res_oc = self._convert_ohm_oc(res_ohm, pre)
+        res_oc = self._convert_ohm_oc(res_ohm)
         res_pre = sum(tw.pressure_measurements) / len(tw.pressure_measurements)
                 
         t_sec = tw.duration.total_seconds()
@@ -234,17 +239,34 @@ class Script(threading.Thread):
                     g_slpm_deviation=g_slpm_deviation
                     )
     
-    def _print_headers(self):
-        print("ΠΑΡΟΧΗ | ΑΡΙΘΜΟΣ | ΘΕΡΜ.ΕΞ | ΘΕΡΜ.ΕΞ | ΠΙΕΣΗ ΕΞ. |             ΕΝΔΕΙΞΗ ΟΡΓΑΝΟΥ             |   ΠΡΑΓΜΑΤΙΚΗ | ΑΠΟΚΛΙΣΗ")
-        print("       | ΕΠΑΝΑΛ. |    Ω    |   oC    | mbar(abs) | V(L) | time | t(min) | G(LPM) | G(SLPM) | ΠΑΡ. Gm(SLPM)|    %")
+    headers = ["ΠΑΡΟΧΗ".decode('utf-8'),
+               "ΑΡΙΘΜΟΣ ΕΠΑΝΑΛ.".decode('utf-8'),
+               "ΘΕΡΜ. ΕΞ. (Ω)".decode('utf-8'),
+               "ΘΕΡΜ. ΕΞ. (oC)".decode('utf-8'),
+               "ΠΙΕΣΗ ΕΞ. (mbar(abs)".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ V(L)".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ time".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ t(min)".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(LPM)".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(SLPM)".decode('utf-8'),
+               "ΠΡΑΓΜΑΤΙΚΗ ΠΑΡ. Gm(SLPM)".decode('utf-8'),
+               "ΑΠΟΚΛΙΣΗ (%)".decode('utf-8')]       
     
-    def _print_line(self, li):
-        print("  %d   |    %d   |  %.2f  |  %.2f  |  %.2f  |  %d   | %.4f |  %.2f | %.2f | %.2f |  %.2f  |  %.2f" % (
-            li['flow'], li['iteration'], li['res_ohm'], li['res_oc'], li['pre'],
-            li['vol'], li['t_sec'], li['t_min'], li['g_lpm'], li['g_slpm'],
-            li['g_slpm_real'], li['g_slpm_deviation']))
+    def _format_line(self, li):
+        return ["%d" % li['flow'],
+                "%d" % li['iteration'],
+                "%.2f" % li['res_ohm'],
+                "%.2f" % li['res_oc'],
+                "%d" % li['pre'],
+                "%.4f" % li['vol'],
+                "%.2f" % li['t_sec'],
+                "%.2f" % li['t_min'],
+                "%.2f" % li['g_lpm'],
+                "%.2f" % li['g_slpm'],
+                "%.2f" % li['g_slpm_real'],
+                "%.2f" % li['g_slpm_deviation']]           
     
-    def print_results(self, results, t_env, rh_env):  
+    def print_results(self, results, t_env, rh_env, customer, instrument, serial_number):  
         """This is copied by the user to produce the final certificate.
         """
         dif = self.end_datetime - self.start_datetime
@@ -252,10 +274,40 @@ class Script(threading.Thread):
         dif_hours, remainder = divmod(s, 60)
         dif_min, dif_sec = divmod(remainder, 60)
         dif_str = "%02d:%02d:%02d" % (dif_hours, dif_min, dif_sec)
-        print("Έναρξη %s Λήξη %s Διάρκεια %s" % (
-            str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str ))
+              
+        #one = "Έναρξη %s Λήξη %s Διάρκεια %s" % (
+        #        str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str )
+        #print(one.decode('utf-8'))
+        #two = "Πελάτης: %s Όργανο: %s Σειριακός Αριθμός: %s" % (customer, instrument, serial_number)
+        #print(two.decode('utf-8'))
+        #three = "Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env)
+        #print(three.decode('utf-8'))
         
-        print("Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env))
-        self._print_headers()
+        out = []
         for li in results:
-            self._print_line(li)
+            out.append(self._format_line(li))
+        print(tabulate(out, headers=self.headers))
+        self.write_to_disk(results, t_env, rh_env, customer, instrument,
+                           serial_number)
+        
+    def write_to_disk(self, results, t_env, rh_env, customer, instrument,
+                      serial_number):
+        fname = b'c:/measurements/measurement.csv'
+        csvfile = open(fname, 'wb')
+        writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='"', quoting=csv.QUOTE_MINIMAL)        
+        dif = self.end_datetime - self.start_datetime
+        s = dif.total_seconds()
+        dif_hours, remainder = divmod(s, 60)
+        dif_min, dif_sec = divmod(remainder, 60)
+        dif_str = "%02d:%02d:%02d" % (dif_hours, dif_min, dif_sec)
+        writer.writerow(["Έναρξη %s Λήξη %s Διάρκεια %s" % (
+                         str(self.start_datetime).split(".")[0], str(self.end_datetime).split(".")[0], dif_str )])
+        writer.writerow(["Πελάτης: %s Όργανο: %s Σειριακός Αριθμός: %s" % (
+            customer.encode('utf-8'), instrument.encode('utf-8'), serial_number.encode('utf-8'))])
+        writer.writerow(["Περιβαλλοντικές Συνθήκες. Θερμοκρασία %.2f, Υγρασία %.2f" % (t_env, rh_env)])
+        
+        writer.writerow([h.encode('utf-8') for h in self.headers])
+        for li in results:
+            writer.writerow(self._format_line(li))
+        csvfile.close()
