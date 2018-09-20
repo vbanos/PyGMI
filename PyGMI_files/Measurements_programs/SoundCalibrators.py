@@ -134,10 +134,10 @@ class Script(threading.Thread):
         self.bk2636.decide_set_gain(self.calibrator_nominalevel, self.micsensitivity)
         SPL_standard = []
         SPL_device = []
+        wait_time = self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
         for cnt in range(self.GENERAL_CONF.get('ITERATIONS')):           
             self.stop_switch_instrument("Reference Standard")
             # delay time necessary for calibrator
-            wait_time = self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
             print("Wait for %d sec" % wait_time)
             time.sleep(wait_time)
             res1 = self.measure_SPL("Reference Standard", v_pol=vpol1)
@@ -180,16 +180,17 @@ class Script(threading.Thread):
         self.agilent3350A.turn_off()
        
         # Read Total Harmonic Distortion (THD) from Krohn Hite.
-        kh_list1 = self.kh6880A.read(times=10, delay=1.99)
+        kh_list1 = self.kh6880A.read(times=10, delay=0.99)
+
         kh_avg1 = sum(kh_list1) / len(kh_list1)
         print("AVG DISTORTION", kh_list1)
     
         # check Keithley2001 DC & CURR stability/fluctuation. MA o/p (V) is vmic 
-        dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=20, interval=0.99)
+        dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=15, interval=0.99)
         spl_fluctuation = self.check_fluctuation(dc_volt)
         vmic = round(sum(dc_volt) / len(dc_volt), 5)
-        
-        rd_values = self.racaldana.read_list(times=20, delay=1.99)
+        print("RACAL1")
+        rd_values = self.racaldana.read_list(times=10, delay=0.90)  # very slow to respond
         rd_avg = round(sum(rd_values) / len(rd_values), 3)
         freq_fluctuation = self.check_fluctuation(rd_values)        
         logging.info("Racal Dana average read %g", rd_avg)
@@ -236,10 +237,7 @@ class Script(threading.Thread):
         # measure Vins voltage (ch3) keythley
         dc_volt = self.keithley2001.scan_channel(3, "VOLT:AC", times=20, interval=0.99)
         vins_source3 = sum(dc_volt) / len(dc_volt)
-            
-        # Get Total Harmonic Distortion value for 2nd time from Krohn Hite.
-        # kh_list2 is used ONLY to validate kh_list1 not in the results!!!
-        kh_list2 = self.kh6880A.read(times=10, delay=1.99)      
+                
         thd = sum(kh_list1) / len(kh_list1)        
         SPL = self.uncorrected_sound_pressure_level(vins_source3, atten,
                                                     self.micsensitivity)        

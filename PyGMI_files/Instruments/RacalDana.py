@@ -37,6 +37,7 @@ class Connect_Instrument():
         for _ in range(times):
             results.append(self.read())
             time.sleep(delay)
+            print("Read Racal")
         return results
     
     def read_average(self, times=1, delay=0.0):

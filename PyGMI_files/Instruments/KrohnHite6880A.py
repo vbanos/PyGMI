@@ -35,4 +35,5 @@ class Connect_Instrument():
         for _ in range(times):
             results.append(self.read_value())
             time.sleep(delay)
+            print("READ Kron")
         return results

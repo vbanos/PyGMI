@@ -1,7 +1,8 @@
 import logging 
 import threading
+import sys
 import time
-from Tkinter import *
+from Tkinter import Tk
 from tkFileDialog import askopenfilename
 import yaml
 
@@ -25,8 +26,8 @@ def linearity_tolerance_limits(deviation, uncertainty):
 ######create a separate thread to run the measurements without freezing the front panel######
 class Script(threading.Thread):
                 
-    def __init__(self,mainapp,frontpanel,data_queue,stop_flag,GPIB_bus_lock,**kwargs):
-        #nothing to modify here
+    def __init__(self, mainapp, frontpanel, data_queue, stop_flag,
+                 GPIB_bus_lock, **kwargs):
         threading.Thread.__init__(self,**kwargs)
         self.mainapp=mainapp
         self.frontpanel=frontpanel
@@ -35,23 +36,21 @@ class Script(threading.Thread):
         self.GPIB_bus_lock=GPIB_bus_lock
         
     def run(self):
-        """General configuration is loaded from C:\acoustics-configuration\general.yaml 
+        """General configuration is loaded from
+        C:\acoustics-configuration\general.yaml 
         """
         #with open('C:/acoustics-configuration/slm-general.yaml', 'r') as stream:
         #    self.GENERAL_CONF = yaml.load(stream)     
-        #    #assert self.GENERAL_CONF.get('ITERATIONS')
-        #    #assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
-        m=self.mainapp              #a shortcut to the main app, especially the instruments
-        f=self.frontpanel           #a shortcut to frontpanel values
-        reserved_bus_access=self.GPIB_bus_lock     #a lock that reserves the access to the GPIB bus     
+        #    assert self.GENERAL_CONF.get('ITERATIONS')
+        #    assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
+        # a shortcut to the main app, especially the instruments
+        m = self.mainapp          
         
         logging.info("init all instruments")        
         self.keithley2001 = m.instr_1 # GBIP0::16
         self.wgenerator = m.instr_2   # GBIP0::20 Agilent GBIP::10 Keysight
         self.el100 = m.instr_3        # GBIP0::3
-        # DEBUG
-        self.el100.get()
-                                        
+                                                
         logging.info("Load conf from yaml file")
         root = Tk()
         calibration_conf = askopenfilename(parent=root)
@@ -73,6 +72,9 @@ class Script(threading.Thread):
         
         options = selectMethods60651()
         options.waitForInput()
+        
+        if options.acoustic_test.get():
+            self.acoustic_test()
         if options.self_generated_noise_test.get():
             self.self_generated_noise_test()
         if options.frequency_weighting.get():
@@ -110,8 +112,8 @@ class Script(threading.Thread):
         """
         options = selectMethods616723()
         options.waitForInput()
-        if options.acoustical_test.get():
-            self.acoustical_test()
+        if options.acoustic_test.get():
+            self.acoustic_test()
         if options.self_generated_noise_test.get():
             self.self_generated_noise_test()                
         if options.frequency_weighting.get():
@@ -136,16 +138,49 @@ class Script(threading.Thread):
         self.wgenerator.turn_off()
         self.el100.set(el100)
         
-    def acoustical_test(self):
-        """
-        weight C or A
-        125 Hz
-        1 Khz
-        4 Khz
-        Excel line 24
-        TODO
-        """
-        pass
+    def acoustic_test(self):
+        """125 Hz, 1, 4, 8 Khz
+        Excel line 24. TODO???
+        """        
+        wtitle = "Acoustic Test"
+    
+        calibrator_conf = self.conf.get('calibrator')
+        # manufacturer: "B&K"
+        # type: "4231"
+        # serial_number: "2218152"
+        # spl: 94.0     # from certificate
+        # free_field_correction: -0.15        # from certificate
+        # windscreen_correction: -0.2
+        # pressure_correction: 0.0
+        corrected_spl = calibrator_conf.get('spl') + \
+                        calibrator_conf.get('free_field_correction') + \
+                        calibrator_conf.get('windscreen_correction') + \
+                        calibrator_conf.get('pressure_correction')
+        
+        lrange = self.conf.get('linear_operating_range')
+        lrange_min = lrange.get("min")
+        lrange_max = lrange.get("max")
+        wait("Please connect customer SLM and EIM reference calibrator.", title=wtitle)
+        wait("Please configure the SLM to use A weighting and range %g, %g dB." % (lrange_min, lrange_max))
+                
+        res = []
+        for _ in range(3):
+            slm_val = float(getText("What is the SLM reading (dB)?",
+                                    title=wtitle))
+            res.append(slm_val)
+            time.sleep(3)
+        avg = sum(res) / 3.0
+        diff = abs(avg - corrected_spl)
+        print("SLM Reading %g %g %g dB, average: %g dB, diff: %g dB" % (
+              res[0], res[1], res[2], avg, diff))
+        if diff <= calibrator_conf.get('spl_tolerance'):
+            print("PASS")
+        else:
+            print("FAIL")
+            wait("Please adjust SLM and repeat the test.")
+        
+        # TODO to be continued...
+        
         
     def frequency_weightings(self):
         """Initial el100 value is not fixed. It is calculated by SLM manual values.
@@ -866,9 +901,8 @@ class Script(threading.Thread):
                     return "PASS" if -2.0 <= diff <= 2.0 else "FAIL"            
         
         self.reset_instruments(el100=99.00)
-        upper_range = 120   # TODO which conf variable?
-        target_slm = upper_range - 4
-        
+        target_slm = self.conf.get('linear_operating_range').get("max") - 4.0
+                    
         """ FAST """
         
         wtitle = "Time Weighting (Fast)"

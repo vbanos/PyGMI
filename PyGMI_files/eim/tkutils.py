@@ -7,6 +7,10 @@ class selectMethods60651(object):
     """
     def __init__(self):
         self.root = Toplevel()
+        self.acoustic_test = BooleanVar()
+        chk = Checkbutton(self.root, text="Acoustic Test",
+                          variable=self.acoustic_test)
+        chk.pack()
         self.self_generated_noise_test = BooleanVar()
         chk0 = Checkbutton(self.root, text="Self-generated Noise Test (5.5.2 BS7580, Part 1)",
                            variable=self.self_generated_noise_test)
@@ -57,12 +61,10 @@ class selectMethods616723(object):
     """
     def __init__(self):
         self.root = Toplevel()
-                
-        self.acoustical_test = BooleanVar()
-        chk = Checkbutton(self.root, text="Acoustical Test",
-                          variable=self.acoustical_test)
+        self.acoustic_test = BooleanVar()
+        chk = Checkbutton(self.root, text="Acoustic Test",
+                          variable=self.acoustic_test)
         chk.pack()
-        
         self.self_generated_noise_test = BooleanVar()
         chk0 = Checkbutton(self.root, text="Self-generated Noise Test (5.5.2 BS7580, Part 1)",
                            variable=self.self_generated_noise_test)

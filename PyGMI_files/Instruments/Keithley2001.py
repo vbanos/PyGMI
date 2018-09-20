@@ -69,6 +69,7 @@ class Connect_Instrument():
         for i in range(0, times):
             out.append(round(parse_float(self.io.ask(":READ?")), 5))
             time.sleep(interval)
+            print("SCAN Keithley")
         self.io.write(":rout:CLOSE (@%d)" % channel)
         return out
 
