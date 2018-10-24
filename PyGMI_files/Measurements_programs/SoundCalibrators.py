@@ -82,7 +82,8 @@ class Script(threading.Thread):
         with open('C:/acoustics-configuration/general.yaml', 'r') as stream:
             self.GENERAL_CONF = yaml.load(stream)     
             assert self.GENERAL_CONF.get('ITERATIONS')
-            assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')      
+            assert self.GENERAL_CONF.get('WAIT_BEFORE_SPL_MEASUREMENT')
+            assert self.GENERAL_CONF.get('FREQUENCY')
                 
         # Must have c:/acoustics-configuration/<mic-type>.yaml or the program
         # will not continue
@@ -114,13 +115,13 @@ class Script(threading.Thread):
         m=self.mainapp        
         self.keithley2001 = m.instr_1   # GBIP0::16
         self.racaldana = m.instr_2      # GBIP0::14
-        self.agilent3350A = m.instr_3   # GBIP0::20
+        self.waveform_generator = m.instr_3   # GBIP0::20
         self.kh6880A = m.instr_4        # GBIP0::1
         self.bk2636 = m.instr_5         # GBIP0::4
         self.dpi141 = m.instr_6         # GBIP0::2
         self.el100 = m.instr_7          # GBIP0::3                                 
         self.el100.set("99.99")
-        self.agilent3350A.turn_off()
+        self.waveform_generator.turn_off()
         
         t1 = float(getText("Initial temperature (oC)").strip())
         rh1 = float(getText("Initial humidity (%)").strip())
@@ -177,7 +178,7 @@ class Script(threading.Thread):
         """"Big process that is repeated 5 times for working standard
         and customer device. The final output is a dict with all measurements.
         """               
-        self.agilent3350A.turn_off()
+        self.waveform_generator.turn_off()
        
         # Read Total Harmonic Distortion (THD) from Krohn Hite.
         kh_list1 = self.kh6880A.read(times=10, delay=0.99)
@@ -192,11 +193,16 @@ class Script(threading.Thread):
         print("RACAL1")
         rd_values = self.racaldana.read_list(times=10, delay=0.90)  # very slow to respond
         rd_avg = round(sum(rd_values) / len(rd_values), 3)
+        # Check that Racal Dana frequency is +/-10% of waveform generator frequency
+        frequency = float(self.GENERAL_CONF.get('FREQUENCY'))
+        freq_up = 1.1 * frequency
+        freq_down = 0.9 * frequency
         freq_fluctuation = self.check_fluctuation(rd_values)        
-        logging.info("Racal Dana average read %g", rd_avg)
-        # Racal Dana values must be around 1000 Hz +-10%
-        if rd_avg < 900.0 or rd_avg > 1100.0:
-            wait("Critical Error! Racal Dana value outside range: %g. Terminating program." % rd_avg)
+        logging.info("Racal Dana average read %g, allowed range: [%g, %g].",
+                     rd_avg, freq_down, freq_up)
+        if rd_avg < freq_down or rd_avg > freq_up:
+            wait("Critical Error! Racal Dana value %g outside range: [%g, %g]. Terminating program." % (
+                rd_avg, freq_down, freq_up))
             sys.exit(0)
         
         wait("Stop %s, press any key to continue..." % device_name)
@@ -211,8 +217,9 @@ class Script(threading.Thread):
         # atten#=100.0# - micsensitivity# - nomlevel#
         # micsensivity input variable by user (certificate). e.g. value = -26.49
         # calibrator nominal level e.g. value = 94
-        self.agilent3350A.turn_on()
-        self.agilent3350A.set_frequency(1000, 6.0)  
+        self.waveform_generator.turn_on()
+        frequency = int(self.GENERAL_CONF.get('FREQUENCY'))
+        self.waveform_generator.set_frequency(frequency, 6.0)
         atten = 100.0 - self.micsensitivity - self.calibrator_nominalevel
         good_consec = 0
         vins = 0.0
@@ -244,7 +251,7 @@ class Script(threading.Thread):
         # SPL correction for polarisation voltage
         SPL -= math.log10(v_pol / 200.0)
         # TODO SPL correction for pressure        
-        self.agilent3350A.turn_off()
+        self.waveform_generator.turn_off()
         return dict(attenuation=atten,
                     thd=thd,
                     krohn_hite=kh_avg1,
@@ -583,7 +590,7 @@ class Script(threading.Thread):
         agilent on, kh on, racal on
         keithley 2001 must read channel 3 AC, value 1 V
         """      
-        self.agilent3350A.turn_on()
+        self.waveform_generator.turn_on()
         v_test = self.keithley2001.scan_channel(3, "VOLT:AC")
         print(v_test)    
         sys.exit(0)
