@@ -309,6 +309,7 @@ class Script(threading.Thread):
         logging.info("ranges")
         logging.info(range_lower)
         logging.info(range_upper)
+
         wait("Please configure SLM to LAF weighting at reference level range [%g, %g]." % (
              ref_range_lower, ref_range_upper))
                 
@@ -364,85 +365,130 @@ class Script(threading.Thread):
             print("    %.1f        %.2f        %.2f        %.2f       %.2f        %d" % (
                   row[0], row[1], row[2], row[3], row[4], row[5]))
         
+        # Proceed only if there are many level ranges
+        level_ranges = self.conf.get('level_ranges')
+        if len(level_ranges) <= 1:
+            print("Linearity check complete.")
+            self.reset_instruments()
+            return
         
-        """if level ranges has multiple values beyond REF, perform extra test.
-        Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
-        Section 6.9, standard 61672-3 clause 15.2 15.3 15.4
-        Note that agilent is already set to 8000 Hz and volt TODO ACPP
-        TODO FIX
+        def _print_level(upper, lower, at1, at2, at3, at4, dvm_rdg):
+            """TODO this works only if upper > 94 > lower
+            """
+            print("Range | Nominal SPL | Attn Setting | Diff re RefSpl | Nom Diff | Dvm Rdg | Pass/Fail")
+            print("         (dB)       |   (dB)       |   (dB)         |   (dB)      (mV)")
+            
+            if upper >= 94:
+                nom_diff1 = upper - 2 - 94
+                nom_diff2 = 0.0
+                nom_diff3 = 0.0
+                nom_diff4 = lower + 2 - 94
+                
+                # The threshold depends on the SLM class
+                uncertainty = 0.2
+                class1 = linearity_tolerance_limits(nom_diff1 - (at1 - at3), uncertainty)     
+                class2 = linearity_tolerance_limits(nom_diff2 - (at1 - at2), uncertainty)
+                class3 = linearity_tolerance_limits(nom_diff3 - (at1 - at1), uncertainty)
+                class4 = linearity_tolerance_limits(nom_diff4 - (at1 - at4), uncertainty)
+                
+                print(" %.1f | %.1f     | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                    upper, upper-2.0, at3, at1 - at3, nom_diff1, dvm_rdg, class1 ))
+                print("  0.0 |  94.0   | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                      at2, at1 - at2, nom_diff2, dvm_rdg, class2 ))
+                print("  0.0 | Ref       | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                      at1, at1 - at1, nom_diff3, dvm_rdg, class3 ))
+                print("  0.0 | %.1f      | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                      lower+2.0, at4, at1 - at4, nom_diff4, dvm_rdg, class4 ))
+            else:
+                nom_diff1 = 94 - (upper - 2)
+                nom_diff3 = 0.0
+                nom_diff4 = lower + 2 - 94
+                
+                # The threshold depends on the SLM class TODO
+                uncertainty = 0.2
+                class1 = linearity_tolerance_limits(nom_diff1 - (at1 - at3), uncertainty)            
+                class3 = linearity_tolerance_limits(nom_diff3 - (at1 - at1), uncertainty)
+                class4 = linearity_tolerance_limits(nom_diff4 - (at1 - at4), uncertainty)
+                
+                print(" %.1f | %.1f     | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                    upper, upper-2.0, at3, at1 - at3, nom_diff1, dvm_rdg, class1 ))
+                print("  0.0 | Ref       | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                      at1, at1 - at1, nom_diff3, dvm_rdg, class3 ))
+                print("  0.0 | %.1f      | %.2f        | %.2f           | %.2f  | %.2f  | %s" % (
+                      lower+2.0, at4, at1 - at4, nom_diff4, dvm_rdg, class4 ))
+                
+        # Document reference: New IEC Standards and Periodic Testing of Sound
+        # Level Meters. Section 6.9, standard 61672-3 clause 15.2 15.3 15.4
         if self.conf.get("standard") == "60651":
             freq = 4000        
         elif self.conf.get("standard") == "61672-3":
-            freq = 8000
-            
-        TODO
+            freq = 8000   
         
-        freq = 1000
-        (target_volt, target_atten) = self._tune_wgenerator(freq, ref_point_linearity_check, wtitle)
-        self.wgenerator.turn_on()       
-        level_ranges = self.conf.get('level_ranges')
-        if len(level_ranges) > 1:
-            results = []
-            for lrange in level_ranges[1:]:
-                # Check only ranges where ref_point_linearity_check (94) is
-                # inside the range.
-                print("RANGE", lrange[0], ref_point_linearity_check, lrange[1])
-                if lrange[0] > ref_point_linearity_check > lrange[1]:
-                    wait("Please configure SLM to A weighting at level range [%g, %g]." % (
-                         lrange[0], lrange[1]))
-                    slm = float(getText("What is the SLM value?"))
-                    deviation = ref_point_linearity_check - slm
-                    uncertainty = 0.2
-                    linearity_class = linearity_tolerance_limits(deviation, uncertainty)
-                    results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
-                                    ref_point_linearity_check,
-                                    slm,
-                                    deviation,
-                                    uncertainty,
-                                    linearity_class])
-                    
-            def _print_slm_range_results(results):
-                print("SLM range setting    Expected value    SLM Reading value    Deviation    Uncertainty    Class")
-                print("      (dB)                (dB)                (dB)            (dB)            (dB)        ")
-                for row in results:
-                    print("    %s        %.2f           %.2f            %.2f        %.2f          %d" % (
-                        row[0], row[1], row[2], row[3], row[4], row[5]))
+        # We skip the first level range (reference) because we have already
+        # checked it before in the linearity process.
+        print("Other Ranges Linearity Test")
+        for lrange in level_ranges[1:]:
+            # If 94 is within range.
+            if lrange[0] > 94 > lrange[1]:
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+                self.el100.set("01.00")
+                # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
+                # NOTE: Must keep ref_volt, ref_atten for later comparisons!
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange[0] - 2, wtitle)
+                wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
+                    ref_range_lower, ref_range_upper))
         
-            _print_slm_range_results(results)
-        
-            # Document reference: New IEC Standards and Periodic Testing of Sound Level Meters.
-            # Section 6.9, standard 61672-3 clause 15.4
-            
-            results = []
-            self.wgenerator.set_frequency(1000.0, volt=target_volt)
-            #self.wgenerator.turn_on()
-            #target_slm = ref_range_upper - 5
-            # TODO BUG here
-            #wait("Please configure the attenuator so that SLM reads %g dB (upper limit -5)" % target_slm)
-            #ref_atten = self.el100.get()
-            for lrange in level_ranges[1:]:
-                wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (lrange[0], lrange[1]))
-                (target_volt, target_atten) = self._tune_wgenerator(freq, lrange[0] - 1, wtitle)
-
-                # prostheto 135 - 94 = 41 ston attenuator (REFERENCE)
+                atten_dif = lrange[0] - 2 - 94  # 94 is the fixed reference value
+                self.el100.set(ref_atten + atten_dif)
+                self.wgenerator.turn_on()
+                wait("Please tune the attenuator manually to achieve SLM 94 dB.")
+                at1 = self.el100.get()
                 
-                slm = float(getText("What is the SLM value?"))
-                if not ref_slm:
-                    ref_slm = slm                    
-                deviation = ref_slm - slm
-                uncertainty = 0.2
-                linearity_class = linearity_tolerance_limits(deviation, uncertainty)
-                results.append(["%.2f - %.2f" % (lrange[0], lrange[1]),
-                                ref_slm,
-                                slm,
-                                deviation,
-                                uncertainty,
-                                linearity_class])
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+                wait("Please tune the attenuator manually to achieve SLM 94 dB")
+                at2 = self.el100.get()
+                upper_target = lrange[0] - 2
+                self.el100.set(at2 - (upper_target - 94))
+                wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
+                at3 = self.el100.get()
+                                
+                lower_target = lrange[1] + 2
+                self.el100.set(at2 + (94 - lower_target))
+                wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
+                at4 = self.el100.get()
+            # If 94 is outside range (e.g. range is [90,20]
+            else:
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+                self.el100.set("01.00")
+                # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
+                # NOTE: Must keep ref_volt, ref_atten for later comparisons!
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange[0] - 2, wtitle)
+                wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
+                    ref_range_lower, ref_range_upper))
         
-            _print_slm_range_results(results)
-            print("Attenuator value: %g" % ref_atten)
-        """
-
+                atten_dif = 94 - (lrange[0] - 2)  # 94 is the fixed reference value
+                self.el100.set(ref_atten - atten_dif)
+                self.wgenerator.turn_on()
+                wait("Please tune the attenuator manually to achieve SLM 94 dB.")
+                at1 = self.el100.get()   
+                
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))          
+                at2 = 0.0  # not used - we don't do anything about it.                                
+                upper_target = lrange[0] - 2
+                atten_plus = 94 - upper_target
+                self.el100.set(ref_atten + atten_plus)
+                wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
+                at3 = self.el100.get()
+                        
+                lower_target = lrange[1] + 2
+                atten_minus = 94 - lower_target
+                self.el100.set(ref_atten + atten_minus)
+                wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
+                at4 = self.el100.get()
+                           
+                            
+            _print_level(upper=lrange[0], lower=lrange[1], at1=at1, at2=at2,
+                         at3=at3, at4=at4, dvm_rdg=ref_volt)              
         
         self.reset_instruments()
     

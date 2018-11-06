@@ -20,7 +20,7 @@ class Connect_Instrument():
         Each number corresponds to a char (ref EL100 manual tables).
         We write these chars to the device configure it.
         """
-        if type(value_str) == float:
+        if type(value_str) == float or type(value_str) == int:
             value_str = "%05.2f" % value_str
         
         logging.info("SET EL100 VALUE %s", value_str)
