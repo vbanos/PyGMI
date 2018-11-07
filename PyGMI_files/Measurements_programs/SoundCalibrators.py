@@ -4,64 +4,9 @@ import numpy
 import threading
 import time
 from Tkinter import *
-import tkMessageBox
-import winsound
 import yaml
 from datetime import datetime
-from _hotshot import resolution
-
-
-class takeInput(object):
-    """Utility class to show popup and get user input string.
-    """
-    def __init__(self,requestMessage):
-        self.root = Tk()
-        self.root.after(2000, lambda: self.e.focus_force())
-        self.string = ''
-        self.frame = Frame(self.root)
-        self.frame.pack()        
-        self.acceptInput(requestMessage)
-
-    def acceptInput(self,requestMessage):
-        r = self.frame
-
-        k = Label(r,text=requestMessage)
-        k.pack(side='left')
-        self.e = Entry(r,text='Name')
-        self.e.pack(side='left')
-        self.e.focus_set()
-        self.e.bind('<Return>', self.gettext)
-        b = Button(r,text='okay',command=self.gettext)
-        b.pack(side='right')
-        self.root.bind('<Return>', self.gettext)
-
-    def gettext(self, event=None):
-        self.string = self.e.get()
-        self.root.withdraw()
-        self.root.destroy()
-        self.root.quit()
-
-    def getString(self):
-        return self.string
-
-    def waitForInput(self):
-        self.root.mainloop()
-
-def getText(requestMessage):
-    msgBox = takeInput(requestMessage)
-    #loop until the user makes a decision and the window is destroyed
-    msgBox.waitForInput()
-    msg = msgBox.getString()   
-    return msg
-
-def wait(msg):
-    """Wait until any key is pressed.
-    """
-    frequency = 2500  # Set Frequency To 2500 Hertz
-    duration = 1000  # Set Duration To 1000 ms == 1 second
-    winsound.Beep(frequency, duration)
-    Tk().wm_withdraw() #to hide the main window
-    tkMessageBox.showinfo("Calibration",msg)
+from ..eim.tkutils import getText, wait
 
 
 ######create a separate thread to run the measurements without freezing the front panel######
@@ -104,7 +49,7 @@ class Script(threading.Thread):
         # TODO which settings go in there?
         self.calibrator_nominalevel = int(getText("Calibrator Nominal Level (94, 104 or 114dB)").strip())
         self.mic_type = mic_type
-        self.micsensitivity = float(self.MIC_CONF.get("SENSITIVITY"))
+        self.micsensitivity = self._get_mic_sensitivity()
         self.mic_serial_number = self.MIC_CONF.get("SERIAL_NUMBER")
         
         # DEBUGGING
@@ -173,6 +118,36 @@ class Script(threading.Thread):
         self.end_datetime = datetime.now()        
         self.print_results(env, SPL_standard, SPL_device, standard_uncertainty,
                            device_uncertainty)               
+    
+    def _get_mic_sensitivity(self):
+        """Microphone sensitivity depends on frequency. Microphone yaml configuration
+        has an array in SENSITIVITY key with this information.
+        """
+        freq = self.GENERAL_CONF.get('FREQUENCY')
+        sensitivities = self.MIC_CONF.get("SENSITIVITY")
+        if type(sensitivities) is not dict:
+            wait("Microphone configuration is not correct. Sensitivity is not an array.")
+            sys.exit(0)
+        sensitivity = sensitivities.get(freq)
+        if not sensitivity:
+            wait("No sensitivity for frequency %d. Please check your microphone configuration." % freq)
+            sys.exit(0)
+        return sensitivity
+    
+    def _get_mic_uncertainty(self):
+        """Microphone sensitivity uncertainty depends on frequency. Microphone yaml
+        configuration has an array in SENSITIVITY_UNCERTAINTIES key with this information.
+        """
+        freq = self.GENERAL_CONF.get('FREQUENCY')
+        uncertainties = self.MIC_CONF.get('SENSITIVITY_UNCERTAINTIES')
+        if type(uncertainties) is not dict:
+            wait("Microphone configuration is not correct. Sensitivity uncertainties is not an array.")
+            sys.exit(0)
+        u = uncertainties.get(freq)
+        if not u:
+            wait("No uncertainty for frequency %d. Please check your microphone configuration." % freq)
+            sys.exit(0)
+        return u
     
     def measure_SPL(self, device_name, v_pol):
         """"Big process that is repeated 5 times for working standard
@@ -339,8 +314,8 @@ class Script(threading.Thread):
         avg_attenuation = sum([row['attenuation'] for row in measurements]) / len(measurements)
         Au = self.attenuator_uncertainty(avg_attenuation)
         Ae = self.attenuator_error(avg_attenuation)
-        
-        Mu = self.MIC_CONF.get('SENSITIVITY_UNCERTAINTY')   # value from certificate
+           
+        Mu = self._get_mic_uncertainty()        
         Mp = 0.038   # table page 24 of 42     TODO table logic in function to decide Mp
         Mt = 0.05    # table page 25 of 42      TODO table logic in function to decide Mt
         MM = 0.005  # STANDARD page 25

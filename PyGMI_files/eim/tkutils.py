@@ -155,3 +155,58 @@ def wait(msg, title=None):
     winsound.Beep(2500, 1000)
     Tk().wm_withdraw() #to hide the main window
     tkMessageBox.showinfo(title if title else "Calibration", msg)
+    
+    
+"""
+copied duplicate code, TODO delete it.
+class takeInput(object):
+    Utility class to show popup and get user input string.
+    def __init__(self,requestMessage):
+        self.root = Tk()
+        self.root.after(2000, lambda: self.e.focus_force())
+        self.string = ''
+        self.frame = Frame(self.root)
+        self.frame.pack()        
+        self.acceptInput(requestMessage)
+
+    def acceptInput(self,requestMessage):
+        r = self.frame
+
+        k = Label(r,text=requestMessage)
+        k.pack(side='left')
+        self.e = Entry(r,text='Name')
+        self.e.pack(side='left')
+        self.e.focus_set()
+        self.e.bind('<Return>', self.gettext)
+        b = Button(r,text='okay',command=self.gettext)
+        b.pack(side='right')
+        self.root.bind('<Return>', self.gettext)
+
+    def gettext(self, event=None):
+        self.string = self.e.get()
+        self.root.withdraw()
+        self.root.destroy()
+        self.root.quit()
+
+    def getString(self):
+        return self.string
+
+    def waitForInput(self):
+        self.root.mainloop()
+
+def getText(requestMessage):
+    msgBox = takeInput(requestMessage)
+    #loop until the user makes a decision and the window is destroyed
+    msgBox.waitForInput()
+    msg = msgBox.getString()   
+    return msg
+
+def wait(msg):
+    # Wait until any key is pressed.
+    
+    frequency = 2500  # Set Frequency To 2500 Hertz
+    duration = 1000  # Set Duration To 1000 ms == 1 second
+    winsound.Beep(frequency, duration)
+    Tk().wm_withdraw() #to hide the main window
+    tkMessageBox.showinfo("Calibration",msg)
+"""
