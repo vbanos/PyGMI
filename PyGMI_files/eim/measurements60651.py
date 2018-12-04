@@ -176,7 +176,19 @@ class TimeWeighting60651(BaseMeasurement):
                 return "PASS" if -2.0 <= diff <= 2.0 else "FAIL"
 
 
-class Linearity60651(BaseMeasurement):            
+class Linearity60651(BaseMeasurement):
+
+    def _suggested_starting_atten(self, current_range):
+        """TODO use this by default instead of using just 01.00 as atten default.
+        """
+        min_range = min(current_range)
+        max_range = max(current_range)
+        ref = 94
+        if min_range < ref < max_range:
+            return max_range - ref + 2.0
+        else:
+            return ref - max_range + 2.0
+
     def __call__(self):
         """1. The problem is that we need to set an ACPP value to get
         attenuator ~50+-10.
