@@ -13,13 +13,15 @@ import yaml
 from datetime import datetime
 from _hotshot import resolution
 
+helv24 = ('Helvetica', '24')
+
 
 class takeInput(object):
     """Utility class to show popup and get user input string.
     """
     def __init__(self,requestMessage, default_value=""):
         self.root = Tk()
-        self.root.after(2000, lambda: self.e.focus_force())
+        self.root.after(500, lambda: self.e.focus_force())
         self.string = ''
         self.frame = Frame(self.root)
         self.frame.pack()        
@@ -66,40 +68,47 @@ class TimerWindow(object):
         
         self.resistance_measurements = []
         self.pressure_measurements = []
+        self.is_counting = False
         
         
     def acceptInput(self):
         r = self.frame
         
-        self.k = Label(r,text="TIMER")
+        self.k = Label(r,text="TIMER", font=helv24)
         self.k.pack(side='left')
                 
-        self.label = Label(r, text="")
+        self.label = Label(r, text="", font=helv24)
         self.label.pack()
         
-        b1 = Button(r,text='Start',command=self.start)
+        b1 = Button(r,text='Start / Stop', command=self.start_stop, font=helv24)
         b1.pack(side='right')
         b1.focus_set()
+        self.is_counting = False
         
-        b2 = Button(r, text='Stop', command=self.stop)
-        b2.pack(side='right')
+    def start_stop(self):
+        # start
+        print("start / stop")
         
-    def start(self):
-        self.t1 = datetime.utcnow()
-        self.k.text = "Counter started"
-        self.timer_running = True
-        self.count_time()
+        if self.is_counting == False:
+            self.t1 = datetime.utcnow()
+            self.k.text = "Counter started"
+            self.timer_running = True
+            self.is_counting = True
+            self.count_time()
         
-    def stop(self):
-        # disable count_time and calculate time
-        self.count_time = lambda: True
-        self.t2 = datetime.utcnow()
-        self.timer_running = False
-        self.duration = self.t2 - self.t1
-        # close window
-        self.root.withdraw()
-        self.root.destroy()
-        self.root.quit()
+        # stop
+        elif self.is_counting == True:    
+            # disable count_time and calculate time
+            self.count_time = lambda: True
+            self.t2 = datetime.utcnow()
+            self.timer_running = False
+            self.duration = self.t2 - self.t1
+            self.is_counting = False
+            
+            # close window
+            self.root.withdraw()
+            self.root.destroy()
+            self.root.quit()
         
     def count_time(self):
         """Record pressure and resistance values every 10''.
@@ -163,19 +172,19 @@ class Script(threading.Thread):
         self.mensor = m.instr_1   # GBIP0::16
         self.agilent3340 = m.instr_2      # GBIP0::14      
         
-        customer = getText("Πελάτης")
-        instrument = getText("Όργανο")
-        serial_number = getText("Σεριακός Αριθμός")
+        customer = getText("Customer")
+        instrument = getText("Equipment description")
+        serial_number = getText("Equipment Serial Number")
         
-        t1 = float(getText("Current temperature (oC)").strip())
+        t1 = float(getText("Current room temperature (oC)").strip())
         rh1 = float(getText("Current humidity (%)").strip())
-        pre = float(getText("Current pressure").strip())
+        pre = float(getText("Current ambient pressure").strip())
         
         # Flows used in calibration are user-defined.
         flows_str = getText("Calibration flows (comma separated values)",
                             default_value="100,75,45,25,15").strip()
         flows = [int(fl.strip()) for fl in flows_str.split(",")]
-        flow_unit = getText("Flow measurement unit (LPM, LPH, M3H)", default_value="LPM")
+        flow_unit = getText("Flow measurement unit (LPM, LPH)", default_value="LPM")
         results = []
         for flow in flows:
             wait("Flow = %d %s. Flow Adjustment in progress. Please press OK when ready." % (
@@ -200,12 +209,12 @@ class Script(threading.Thread):
         """        
         nom = (-self.r * self.a) + math.sqrt((self.r*self.a)**2 - (4.0*self.r*self.b*(self.r-val)))
         denom = (2.0*self.r*self.b)        
-        return nom / denom 
+        return round(nom / denom, 6) 
     
     def _convert_lpm_slpm(self, lpm, pre, res_oc):
         """Function from cell J46.
         """
-        return lpm * (pre/1013.25) * (293.15/(res_oc + 273.15) )
+        return round(lpm * (pre/1013.25) * (293.15/(res_oc + 273.15) ), 2)
     
     def measure(self, flow, flow_unit, vol, iteration, pre):
         wait("Flow %d %s Run %d/3" % (flow, flow_unit, iteration))        
@@ -214,14 +223,17 @@ class Script(threading.Thread):
                          pressure_callback=self.mensor.read)
         tw.waitForInput()
         
-        res_ohm = sum(tw.resistance_measurements) / len(tw.resistance_measurements)
+        res_ohm = round(sum(tw.resistance_measurements) / len(tw.resistance_measurements), 3)
         res_oc = self._convert_ohm_oc(res_ohm)
-        res_pre = sum(tw.pressure_measurements) / len(tw.pressure_measurements)
+        res_pre = round(sum(tw.pressure_measurements) / len(tw.pressure_measurements), 1)
+        print("RES_PRE", res_pre)
                 
         t_sec = tw.duration.total_seconds()
-        t_min = t_sec / 60.0
-        g_lpm = vol / t_min 
-        g_slpm = self._convert_lpm_slpm(g_lpm, pre, res_oc)
+        t_min = round(t_sec / 60.0, 5)
+        g_lpm = vol / t_min
+        if flow_unit == "LPH":
+            g_lpm *= 60
+        g_slpm = self._convert_lpm_slpm(g_lpm, res_pre, res_oc)
         g_slpm_real = float(getText("Real Flow Gm(SLPM);").strip())
         g_slpm_deviation = ((g_slpm - g_slpm_real) / g_slpm_real) * 100.0  
         
@@ -236,7 +248,7 @@ class Script(threading.Thread):
                     g_lpm=g_lpm,
                     g_slpm=g_slpm,
                     g_slpm_real=g_slpm_real,
-                    g_slpm_deviation=g_slpm_deviation
+                    g_slpm_deviation=g_slpm_deviation,
                     )
     
     headers = ["ΠΑΡΟΧΗ".decode('utf-8'),
@@ -247,20 +259,20 @@ class Script(threading.Thread):
                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ V(L)".decode('utf-8'),
                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ time".decode('utf-8'),
                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ t(min)".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(LPM)".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(SLPM)".decode('utf-8'),
-               "ΠΡΑΓΜΑΤΙΚΗ ΠΑΡ. Gm(SLPM)".decode('utf-8'),
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(LPM)".decode('utf-8'),  # TODO LPM / LPH based on flow_type
+               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(SLPM)".decode('utf-8'), # TODO LPM / LPH based on flow_type
+               "ΠΡΑΓΜΑΤΙΚΗ ΠΑΡ. Gm(SLPM)".decode('utf-8'),# TODO LPM / LPH based on flow_type
                "ΑΠΟΚΛΙΣΗ (%)".decode('utf-8')]       
     
     def _format_line(self, li):
         return ["%d" % li['flow'],
                 "%d" % li['iteration'],
-                "%.2f" % li['res_ohm'],
-                "%.2f" % li['res_oc'],
-                "%d" % li['pre'],
+                "%.3f" % li['res_ohm'],
+                "%.5f" % li['res_oc'],
+                "%.2f" % li['pre'],
                 "%.4f" % li['vol'],
-                "%.2f" % li['t_sec'],
-                "%.2f" % li['t_min'],
+                "%.6f" % li['t_sec'],
+                "%.6f" % li['t_min'],
                 "%.2f" % li['g_lpm'],
                 "%.2f" % li['g_slpm'],
                 "%.2f" % li['g_slpm_real'],
