@@ -12,6 +12,7 @@ import winsound
 import yaml
 from datetime import datetime
 from _hotshot import resolution
+from openpyxl import Workbook
 
 helv24 = ('Helvetica', '24')
 
@@ -265,6 +266,19 @@ class Script(threading.Thread):
                "ΑΠΟΚΛΙΣΗ (%)".decode('utf-8')]       
     
     def _format_line(self, li):
+        return [li['flow'],
+                li['iteration'],
+                float("%.3f" % li['res_ohm']),
+                float("%.5f" % li['res_oc']),
+                float("%.2f" % li['pre']),
+                float("%.4f" % li['vol']),
+                float("%.6f" % li['t_sec']),
+                float("%.6f" % li['t_min']),
+                float("%.2f" % li['g_lpm']),
+                float("%.2f" % li['g_slpm']),
+                float("%.2f" % li['g_slpm_real']),
+                float("%.2f" % li['g_slpm_deviation'])]
+        """
         return ["%d" % li['flow'],
                 "%d" % li['iteration'],
                 "%.3f" % li['res_ohm'],
@@ -276,7 +290,8 @@ class Script(threading.Thread):
                 "%.2f" % li['g_lpm'],
                 "%.2f" % li['g_slpm'],
                 "%.2f" % li['g_slpm_real'],
-                "%.2f" % li['g_slpm_deviation']]           
+                "%.2f" % li['g_slpm_deviation']]
+        """           
     
     def print_results(self, results, t_env, rh_env, customer, instrument, serial_number):  
         """This is copied by the user to produce the final certificate.
@@ -304,6 +319,32 @@ class Script(threading.Thread):
         
     def write_to_disk(self, results, t_env, rh_env, customer, instrument,
                       serial_number):
+        """Write to xlsx file
+        """
+        wb = Workbook()
+        ws = wb.active
+        
+        dif = self.end_datetime - self.start_datetime
+        s = dif.total_seconds()
+        dif_hours, remainder = divmod(s, 60)
+        dif_min, dif_sec = divmod(remainder, 60)
+        dif_str = "%02d:%02d:%02d" % (dif_hours, dif_min, dif_sec)
+        ws.append(["Έναρξη", str(self.start_datetime).split(".")[0],
+                   "Λήξη", str(self.end_datetime).split(".")[0],
+                   "Διάρκεια", dif_str])
+        ws.append(["Πελάτης", customer.encode('utf-8'), 
+                   "Όργανο", instrument.encode('utf-8'),
+                   "Σειριακός Αριθμός", serial_number.encode('utf-8')])
+        ws.append(["Περιβαλλοντικές Συνθήκες"])
+        ws.append(["Θερμοκρασία", t_env, "Υγρασία", "%.2f" % rh_env])
+        ws.append([h.encode('utf-8') for h in self.headers])
+        for li in results:
+            ws.append(self._format_line(li))
+            
+        wb.save('c:/measurements/measument%s.xlsx' % str(self.end_datetime).split(".")[0].replace(":", "."))
+                
+        """
+        OLD WRITING TO CSV
         fname = b'c:/measurements/measurement.csv'
         csvfile = open(fname, 'wb')
         writer = csv.writer(csvfile, delimiter=',',
@@ -323,3 +364,4 @@ class Script(threading.Thread):
         for li in results:
             writer.writerow(self._format_line(li))
         csvfile.close()
+        """
