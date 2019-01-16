@@ -173,13 +173,13 @@ class Script(threading.Thread):
         self.mensor = m.instr_1   # GBIP0::16
         self.agilent3340 = m.instr_2      # GBIP0::14      
         
-        customer = getText("Customer")
-        instrument = getText("Equipment description")
-        serial_number = getText("Equipment Serial Number")
+        customer = getText("Πελάτης")
+        instrument = getText("Περιγραφή Εξοπλισμού προς διακρίβωση")
+        serial_number = getText("Σειριακός Αριθμός Εξοπλισμού")
         
-        t1 = float(getText("Current room temperature (oC)").strip())
-        rh1 = float(getText("Current humidity (%)").strip())
-        pre = float(getText("Current ambient pressure").strip())
+        t1 = float(getText("Θερμοκρασία εργαστηρίου (oC)").strip())
+        rh1 = float(getText("Υγρασία εργαστηρίου (%)").strip())
+        pre = float(getText("Ατμοσφαιρική πίεση εργαστηρίου").strip())
         
         # Flows used in calibration are user-defined.
         flows_str = getText("Calibration flows (comma separated values)",
@@ -195,15 +195,15 @@ class Script(threading.Thread):
                 while True:
                     line = self.measure(flow, flow_unit, vol, iteration, pre)
                     out = [self._format_line(line)]
-                    print(tabulate(out, headers=self.headers))
-                    confirm = getText("Deviation %.2f. Please type \"yes\" to continue or leave empty to repeat" % line['g_slpm_deviation'],
+                    print(tabulate(out, headers=self._headers(flow_unit)))
+                    confirm = getText("Απόκλιση %.2f. Γράψτε \"yes\" για να συνεχίσετε ή αφήστε το ΚΕΝΟ για να επαναλάβετε το βήμα της μέτρησης" % line['g_slpm_deviation'],
                                       default_value="yes")
                     if confirm == "yes":        
                         results.append(line)
                         break
                                
         self.end_datetime = datetime.now()        
-        self.print_results(results, t1, rh1, customer, instrument, serial_number)
+        self.print_results(results, t1, rh1, customer, instrument, serial_number, flow_unit)
     
     def _convert_ohm_oc(self, val):
         """Function from cell D46.
@@ -252,18 +252,19 @@ class Script(threading.Thread):
                     g_slpm_deviation=g_slpm_deviation,
                     )
     
-    headers = ["ΠΑΡΟΧΗ".decode('utf-8'),
-               "ΑΡΙΘΜΟΣ ΕΠΑΝΑΛ.".decode('utf-8'),
-               "ΘΕΡΜ. ΕΞ. (Ω)".decode('utf-8'),
-               "ΘΕΡΜ. ΕΞ. (oC)".decode('utf-8'),
-               "ΠΙΕΣΗ ΕΞ. (mbar(abs)".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ V(L)".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ time".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ t(min)".decode('utf-8'),
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(LPM)".decode('utf-8'),  # TODO LPM / LPH based on flow_type
-               "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(SLPM)".decode('utf-8'), # TODO LPM / LPH based on flow_type
-               "ΠΡΑΓΜΑΤΙΚΗ ΠΑΡ. Gm(SLPM)".decode('utf-8'),# TODO LPM / LPH based on flow_type
-               "ΑΠΟΚΛΙΣΗ (%)".decode('utf-8')]       
+    def _headers(self, flow_unit="LPM"):
+        return ["ΠΑΡΟΧΗ".decode('utf-8'),
+                "ΑΡΙΘΜΟΣ ΕΠΑΝΑΛ.".decode('utf-8'),
+                "ΘΕΡΜ. ΕΞ. (Ω)".decode('utf-8'),
+                "ΘΕΡΜ. ΕΞ. (oC)".decode('utf-8'),
+                "ΠΙΕΣΗ ΕΞ. (mbar(abs)".decode('utf-8'),
+                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ V(L)".decode('utf-8'),
+                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ time".decode('utf-8'),
+                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ t(min)".decode('utf-8'),
+                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(%s)".decode('utf-8') % flow_unit,  
+                "ΈΝΔΕΙΞΗ ΟΡΓΑΝΟΥ G(S%s)".decode('utf-8') % flow_unit, 
+                "ΠΡΑΓΜΑΤΙΚΗ ΠΑΡ. Gm(S%s)".decode('utf-8') % flow_unit,
+                "ΑΠΟΚΛΙΣΗ (%)".decode('utf-8')]     
     
     def _format_line(self, li):
         return [li['flow'],
@@ -293,7 +294,7 @@ class Script(threading.Thread):
                 "%.2f" % li['g_slpm_deviation']]
         """           
     
-    def print_results(self, results, t_env, rh_env, customer, instrument, serial_number):  
+    def print_results(self, results, t_env, rh_env, customer, instrument, serial_number, flow_unit):  
         """This is copied by the user to produce the final certificate.
         """
         dif = self.end_datetime - self.start_datetime
@@ -313,12 +314,12 @@ class Script(threading.Thread):
         out = []
         for li in results:
             out.append(self._format_line(li))
-        print(tabulate(out, headers=self.headers))
+        print(tabulate(out, headers=self._headers(flow_unit)))
         self.write_to_disk(results, t_env, rh_env, customer, instrument,
-                           serial_number)
+                           serial_number, flow_unit)
         
     def write_to_disk(self, results, t_env, rh_env, customer, instrument,
-                      serial_number):
+                      serial_number, flow_unit):
         """Write to xlsx file
         """
         wb = Workbook()
@@ -337,11 +338,13 @@ class Script(threading.Thread):
                    "Σειριακός Αριθμός", serial_number.encode('utf-8')])
         ws.append(["Περιβαλλοντικές Συνθήκες"])
         ws.append(["Θερμοκρασία", t_env, "Υγρασία", "%.2f" % rh_env])
-        ws.append([h.encode('utf-8') for h in self.headers])
+        ws.append([h.encode('utf-8') for h in self._headers(flow_unit)])
         for li in results:
             ws.append(self._format_line(li))
             
-        wb.save('c:/measurements/measument%s.xlsx' % str(self.end_datetime).split(".")[0].replace(":", "."))
+        fname = 'c:/measurements/measument%s.xlsx' % str(self.end_datetime).split(".")[0].replace(":", ".")
+        wb.save(fname)
+        wait("Η διακρίβωση ολοκληρώθηκε. Τα αποτελέσματα βρίσκονται στο αρχείο: " + fname)
                 
         """
         OLD WRITING TO CSV
