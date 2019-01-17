@@ -330,6 +330,11 @@ class PeakCSoundLevel616723(BaseMeasurement):
         
 
 class AcousticTest616723(BaseMeasurement):
+    """ISO 61672-3 Par. 11, Page 19.
+    
+    11.1 Set SLM to C frequency weighting, if not available set A.
+    
+    """
     def __call__(self):
         """125 Hz, 1, 4, 8 Khz
         Excel line 24. TODO???
