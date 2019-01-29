@@ -6,6 +6,7 @@ import time
 from Tkinter import *
 import yaml
 from datetime import datetime
+from openpyxl import Workbook
 from ..eim.tkutils import getText, wait
 
 
@@ -35,6 +36,12 @@ class Script(threading.Thread):
         mic_type = getText("Microphone type? (e.g. 4190)").strip()
         with open('C:/acoustics-configuration/microphones/%s.yaml' % mic_type, 'r') as stream:
             self.MIC_CONF = yaml.load(stream)
+        
+        # CHECK if mic uncertainties are available.    
+        uncertainties = self.MIC_CONF.get('SENSITIVITY_UNCERTAINTIES')
+        if type(uncertainties) is not dict:
+            wait("Microphone configuration is not correct. Sensitivity uncertainties is not an array.")
+            sys.exit(0)
             
         calibrator_type = getText("Reference Calibrator type? (e.g. XXX)").strip()
         with open('C:/acoustics-configuration/calibrators/%s.yaml' % calibrator_type, 'r') as stream:
@@ -118,6 +125,8 @@ class Script(threading.Thread):
         self.end_datetime = datetime.now()        
         self.print_results(env, SPL_standard, SPL_device, standard_uncertainty,
                            device_uncertainty)               
+        self.save_excel_results(env, SPL_standard, SPL_device, standard_uncertainty,
+                                device_uncertainty)
     
     def _get_mic_sensitivity(self):
         """Microphone sensitivity depends on frequency. Microphone yaml configuration
@@ -559,6 +568,91 @@ class Script(threading.Thread):
         _print_uncertainties(standard_u)
         print("--- Customer Device Detailed Uncertainties ---")
         _print_uncertainties(device_u)
+        
+    def save_excel_results(self, env, SPL_standard, SPL_device, standard_u, device_u):  
+        """File saved in C:\measurement-results\20190115.xls
+        Working code example: https://github.com/vbanos/PyGMI/blob/flo2018/PyGMI_files/Measurements_programs/EimFlo.py#L325
+        """
+        wb = Workbook()
+        ws = wb.active
+               
+               
+        header = ["Freq (Hz)", "Freq Fluc (Hz)", "MA o/p (V)", "MA o/p (V)", "IV (V)",
+                  "Atten (dB)", "P+V Corrn (dB)", "S.P.L. (dB)",  ",S.P.L. Fluc (dB)", "THD (%)"]
+
+        # RES format
+        # resline = "%.1f    %.4f     %.4f     %.4f     %.2f   %.3f     %.2f       %.2f        %.2f       %.1f"
+        
+        def _print_instrument(header, data, data_u):
+            ws.append(header)
+            for row in data: 
+                li = [round(row['racal_dana'], 1),
+                      round(row['freq_fluctuation'], 4),
+                      round(row['Vmic'], 4),
+                      round(row['Vins'], 4),
+                      round(row['IV'], 2),
+                      round(row['attenuation'], 3),
+                      round(data_u['pvcorr'], 2),
+                      round(row['SPL'], 2),
+                      round(row['spl_fluctuation'], 2),
+                      round(row['thd'], 1)]
+                ws.append(li)
+            mean_freq = sum(row['racal_dana'] for row in data) / len(data)
+            mean_SPL = sum(row['SPL'] for row in data) / len(data)
+            mean_thd = sum(row['thd'] for row in data) / len(data)
+            # Racal Dana Freq + Uncertainty, Krohn Hite Freq = Uncertainty
+            ws.append(["Mean Freq:", mean_freq, "Hz", "Freq unc:", data_u['u_frequency'], "Hz (k=2.00)",
+                       "Mean dist:", mean_thd, "%", "Dist unc:", data_u['u_thd'], "% (k=2.00)"])
+
+            ws.append(["Mean S.P.L.:", mean_SPL, "Type A unc:", data_u['u_typeA'], "dB",
+                       "Total unc:", data_u['u_total'], "dB"]) 
+                        
+        def _print_uncertainties(data_u):
+            for (i, key) in enumerate(data_u):
+                ws.append([key, round(data_u[key], 4)])
+                            
+        ws.append(["Microphone Type:", self.mic_type, "Serial Number:", self.mic_serial_number,
+                   "Sensitivity", self.micsensitivity, "(dB)"])
+        
+        ref_cal = self.REF_CALIBRATOR_CONF
+        ws.append(["Reference Calibrator Type:", ref_cal.get('type'),
+                   "Manufacturer:", ref_cal.get('manufacturer'),
+                   "Serial Number:", ref_cal.get('serial_number')])
+        customer_cal = self.CUSTOMER_CALIBRATOR_CONF
+        ws.append(["Customer Calibrator Type:", customer_cal.get('type'),
+                   "Manufacturer:", customer_cal.get('manufacturer'),
+                   "Serial Number:", customer_cal.get('serial_number')])
+        ws.append(["Customer Company:", customer_cal.get('company')])
+        
+        dif = self.end_datetime - self.start_datetime
+        s = dif.total_seconds()
+        dif_hours, remainder = divmod(s, 60)
+        dif_min, dif_sec = divmod(remainder, 60)
+        dif_str = "%02d:%02d:%02d" % (dif_hours, dif_min, dif_sec)
+        
+        ws.append(["Calibration start", str(self.start_datetime).split(".")[0], 
+                   "Calibration end", str(self.end_datetime).split(".")[0],
+                   "Duration", dif_str])
+        
+        ws.append(["Pressure", "%.2f" % env['pressure'],
+                   "Temperature", "%.2f" % env['temperature'],
+                   "Relative Humidity", "%.2f" % env['relative_humidity'],
+                   "Polarising Voltage", "%.2f" % env['polarising_voltage']])
+        
+        ws.append(["Working Standard Results"])
+        _print_instrument(header, SPL_standard, standard_u)
+        ws.append(["Customer Device Results"])
+        _print_instrument(header, SPL_device, device_u)
+        
+        ws.append(["Working Standard Detailed Uncertainties"])
+        _print_uncertainties(standard_u)
+        ws.append(["--- Customer Device Detailed Uncertainties ---"])
+        _print_uncertainties(device_u)
+        
+        dt = datetime.now()
+        fname = 'c:/measurement-results/measument%s.xlsx' % str(dt).split(".")[0].replace(":", ".")
+        wb.save(fname)
+        wait("Calibration is complete. Results file: " + fname)
         
     def debugging_script(self):
         """debugging script to run to check things. NOT used normally.
