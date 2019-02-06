@@ -48,6 +48,7 @@ class Script(threading.Thread):
             self.REF_CALIBRATOR_CONF = yaml.load(stream)
             
         calibrator_type = getText("Customer Calibrator type? (e.g. XXX)").strip()
+        self.customer_calibrator_type = calibrator_type
         with open('C:/acoustics-configuration/calibrators/%s.yaml' % calibrator_type, 'r') as stream:
             self.CUSTOMER_CALIBRATOR_CONF = yaml.load(stream)
             
@@ -610,6 +611,8 @@ class Script(threading.Thread):
         def _print_uncertainties(data_u):
             for (i, key) in enumerate(data_u):
                 ws.append([key, round(data_u[key], 4)])
+        
+        ws.append(["Certificate", self.customer_calibrator_type])
                             
         ws.append(["Microphone Type:", self.mic_type, "Serial Number:", self.mic_serial_number,
                    "Sensitivity", self.micsensitivity, "(dB)"])
@@ -639,18 +642,22 @@ class Script(threading.Thread):
                    "Relative Humidity", "%.2f" % env['relative_humidity'],
                    "Polarising Voltage", "%.2f" % env['polarising_voltage']])
         
+        ws.append([" "])
         ws.append(["Working Standard Results"])
         _print_instrument(header, SPL_standard, standard_u)
         ws.append(["Customer Device Results"])
         _print_instrument(header, SPL_device, device_u)
         
+        ws.append([" "])
         ws.append(["Working Standard Detailed Uncertainties"])
         _print_uncertainties(standard_u)
+        
+        ws.append([" "])
         ws.append(["--- Customer Device Detailed Uncertainties ---"])
         _print_uncertainties(device_u)
         
         dt = datetime.now()
-        fname = 'c:/measurement-results/measument%s.xlsx' % str(dt).split(".")[0].replace(":", ".")
+        fname = 'c:/measurement-results/sound-calibrators/%s-%s.xlsx' % (self.customer_calibrator_type, str(dt).split(".")[0].replace(":", "."))
         wb.save(fname)
         wait("Calibration is complete. Results file: " + fname)
         
