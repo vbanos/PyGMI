@@ -62,20 +62,11 @@ class TimeWeighting60651(BaseMeasurement):
         target_slm = self.conf.get('linear_operating_range').get("max") - 4.0
                     
         """ FAST """
-        
         wtitle = "Time Weighting (Fast)"
         wait("Please configure your SLM to FA weighting and reference range.", title=wtitle)
         (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
-                
-        res = []
-        for _ in range(3):
-            self.wgenerator.turn_off()
-            wait("Please reset your SLM, use LAF(MAX) and start measurement.")
-            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=200)
-            slm_fast_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
-            self.wgenerator.stop_burst()
-            res.append(slm_fast_burst)
-        
+        res = self._measure(method="LAF(MAX)", freq=2000, volt=target_volt,
+                            delay=0, count=200, wtitle=wtitle)
         print("Time Weighting Fast Continuous SLM=%g dB, attenuator %g dB" % (
               target_slm, target_atten))
         res_avg = sum(res) / 3.0
@@ -83,20 +74,11 @@ class TimeWeighting60651(BaseMeasurement):
         print("Burst: %g %g %g dB, Average: %g %s" % (res[0], res[1], res[2], res_avg, pass_fail))
         
         """ SLOW """
-        
         wtitle = "Time Weighting (Slow)"
         wait("Please configure your SLM to SA weighting.", title=wtitle)
         (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
-                
-        res = []
-        for _ in range(3):
-            self.wgenerator.turn_off()
-            wait("Please reset your SLM, use LAF(MAX) and start measurement.")
-            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=500)
-            slm_fast_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
-            self.wgenerator.stop_burst()
-            res.append(slm_fast_burst)
-        
+        res = self._measure("LAF(MAX)", freq=2000, volt=target_volt,
+                            delay=0, count=500, wtitle=wtitle)        
         print("Time Weighting Slow Continuous SLM=%g dB, attenuator %g dB" % (
               target_slm, target_atten))
         res_avg = sum(res) / 3.0
@@ -104,38 +86,41 @@ class TimeWeighting60651(BaseMeasurement):
         print("Burst: %g %g %g dB, Average: %g %s" % (res[0], res[1], res[2], res_avg, pass_fail))
                 
         """ Impulse Single Burst - two test signals are used for this."""
-        
         wtitle = "Time Weighting (Impulse)"
         wait("Please configure your SLM to Impulse A weighting.", title=wtitle)
         (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
                 
-        res = []
-        for _ in range(3):
-            self.wgenerator.turn_off()
-            wait("Please reset your SLM, use LAF(MAX) and start measurement.")
-            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=5)
-            slm_impulse_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
-            self.wgenerator.stop_burst()
-            res.append(slm_impulse_burst)
-        
-        res2 = []
-        for _ in range(3):
-            self.wgenerator.turn_off()
-            wait("Please reset your SLM, use LAF(MAX) and start measurement.")
-            self.wgenerator.start_burst(freq=100, volt=target_volt, delay=0, count=5)
-            slm_impulse_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
-            self.wgenerator.stop_burst()
-            res2.append(slm_impulse_burst)
-        
+        res = self._measure(method="LAF(MAX)", freq=2000, volt=target_volt,
+                            delay=0, count=5, wtitle=wtitle)
+                
+        res2 = self._measure(method="LAF(MAX)", freq=100, volt=target_volt,
+                             delay=0, count=5, wtitle=wtitle)
+                
         print("Time Weighting Impulse Continuous SLM=%g dB, attenuator %g dB" % (
               target_slm, target_atten))
         res_avg2 = sum(res2) / 3.0
         pass_fail = self._pass_fail(self.conf.get('slm_type'), res_avg - target_slm, "I1")
-        print("2000Hz Burst: %g %g %g dB, Average: %g %s" % (res[0], res[1], res[2], res_avg, pass_fail))
+        print("2000Hz Burst: %g %g %g dB, Average: %g %s" % (
+            res[0], res[1], res[2], res_avg, pass_fail))
         pass_fail = self._pass_fail(self.conf.get('slm_type'), res_avg2 - target_slm, "I2")
-        print("100Hz Burst: %g %g %g dB, Average: %g %s" % (res2[0], res2[1], res2[2], res_avg2, pass_fail))
+        print("100Hz Burst: %g %g %g dB, Average: %g %s" % (
+            res2[0], res2[1], res2[2], res_avg2, pass_fail))
         
         self.reset_instruments()
+    
+    def _measure(self, method, freq, volt, delay, count, wtitle):
+        """Utility method used repeatedly in TimeWeighting60651. Returns a list of 3 SLM readings.
+        Performs 3 measurements.
+        """
+        res = []
+        for _ in range(3):
+            self.wgenerator.turn_off()
+            wait("Please reset your SLM, use %s and start measurement." % method)
+            self.wgenerator.start_burst(freq=freq, volt=volt, delay=delay, count=count)
+            slm_impulse_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
+            self.wgenerator.stop_burst()
+            res.append(slm_impulse_burst)
+        return res
         
     def _pass_fail(self, slm_type, diff, weighting):
         """table Page 15 of 42, The verification of SLM to BS7580.
