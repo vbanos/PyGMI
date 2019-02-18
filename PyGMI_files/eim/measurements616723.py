@@ -80,22 +80,16 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         all_results = []
         row = _measure()
         all_results.append(row)
-        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
-        print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f       %d" % (
-              row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+        self._print([row])
         self.wgenerator.turn_off()
         
         # TODO SET attenuator initial found value
-        
         self.wgenerator.negative_half_cycle(freq=4000, volt=target_volt/2.0)
         row = _measure()
         all_results.append(row)
         self.wgenerator.turn_off()
         
-        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
-        for row in all_results:
-            print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f     %d" % (
-                  row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+        self._print(all_results)
         self.reset_instruments()
     
         # BUG SLM in table 1 larger by result
@@ -103,6 +97,12 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         # initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class
         # 99.00     18.30      96.70      16.00       -2.30       0.20     2
         # 99.00     18.30      96.60      16.10       -2.40       0.20     2
+
+    def _print(self, all_results):
+        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
+        for row in all_results:
+            print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f     %d" % (
+                  row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
 
 
 class FrequencyTimeWeighting616723(BaseMeasurement):
@@ -129,15 +129,9 @@ class FrequencyTimeWeighting616723(BaseMeasurement):
                             deviation,
                             uncertainty,
                             time_weighting_class])
-        
-        print("Time weighting F    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
-        print("                         (dB)               (dB)              (dB)          (dB)")
-        for row in results:
-            print("%sF        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
-        
-        
+        self._print("F", results)
+        # SLOW time weighting       
         results = []
-        # SLOW time weighting
         for weighting in ["A", "C", "Z"]:
             slm = float(getText("Please set your SLM to %sS weighting and write your SLM value." % weighting))
             deviation = ref_point_linearity_check - slm
@@ -149,12 +143,19 @@ class FrequencyTimeWeighting616723(BaseMeasurement):
                             deviation,
                             uncertainty,
                             time_weighting_class])
-        print("Time weighting S    Expected Value    SLM reading value    Deviation    Uncertainty    Class")
-        print("                         (dB)               (dB)              (dB)          (dB)")
-        for row in results:
-            print("%sS        %.2f        %.2f        %.2f        %.2f        %d" % (row[0], row[1], row[2], row[3], row[4], row[5]))
+        self._print("S", results)
         print("Attenuator value: %g" % ref_attenuation)
         self.reset_instruments()
+
+    def _print(self, method, results):
+        """method could be F or S
+        results is a list of rows (float numbers).
+        """
+        print("Time weighting %s    Expected Value    SLM reading value    Deviation    Uncertainty    Class" % method)
+        print("                         (dB)               (dB)              (dB)          (dB)")
+        for row in results:
+            print("%s%s        %.2f        %.2f        %.2f        %.2f        %d" % (
+                  row[0], method, row[1], row[2], row[3], row[4], row[5]))
 
 
 class ToneburstResponse616723(BaseMeasurement):
