@@ -37,9 +37,8 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         self.reset_instruments()
         
         wtitle = "Overload Indication (61672-3 Electrical Tests Par.18)" 
-        lrange = self.conf.get('least_sensitive_level_range')
-        upper_range = lrange[0]
-        lower_range = lrange[1]
+        upper_range = max(self.least_sensitive_level_range)
+        lower_range = min(self.least_sensitive_level_range)
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
              upper_range, lower_range, weighting), title=wtitle)
@@ -167,9 +166,8 @@ class ToneburstResponse616723(BaseMeasurement):
         """
         self.reset_instruments()
         wtitle = "Toneburst Response, ISO61672-3 Electrical Tests Par. 16"
-        level_ranges = self.conf.get('level_ranges')
-        upper_ref_level_range = level_ranges[0][0]
-        lower_ref_level_range = level_ranges[0][1]
+        upper_ref_level_range = max(self.reference_level_range)
+        lower_ref_level_range = min(self.reference_level_range)
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
              upper_ref_level_range, lower_ref_level_range, weighting), wtitle)
@@ -238,9 +236,8 @@ class PeakCSoundLevel616723(BaseMeasurement):
         """
         self.reset_instruments()
         wtitle = "Peak C sound Level (61672-3 Electrical Tests Par.17)"
-        lrange = self.conf.get('least_sensitive_level_range')
-        upper_range = lrange[0]
-        lower_range = lrange[1]
+        upper_range = max(self.least_sensitive_level_range)
+        lower_range = min(self.least_sensitive_level_range)
         weighting = "C"
         target_slm = upper_range - 8.0
         wait("Please set your Sound Level Meter to %s weighting, main variable LCF and the least sensitive level range (%g, %g)." % (
@@ -353,10 +350,11 @@ class AcousticTest616723(BaseMeasurement):
                         calibrator_conf.get('windscreen_correction') + \
                         calibrator_conf.get('pressure_correction')
         
-        lrange = self.conf.get('linear_operating_range')
+        lrange_min = min(self.linear_operating_range)
+        lrange_max = max(self.linear_opereating_range)
         wait("Please connect customer SLM and EIM reference calibrator.", title=wtitle)
         wait("Please configure the SLM to use A weighting and range %g, %g dB." % (
-            lrange.get("min"), lrange.get("max")))
+            lrange_min, lrange_max))
                 
         slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
                                      title=wtitle, repeat=3, delay=3, type=float)

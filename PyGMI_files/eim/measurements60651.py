@@ -2,6 +2,7 @@
 Methods for ISO 60651 - BS 7580
 """
 import logging
+import sys
 import time
 from tkutils import wait, getText, getMultipleUserInputs
 
@@ -14,7 +15,21 @@ class BaseMeasurement(object):
         self.el100 = el100
         self.wgenerator = wgenerator
         self.keithley2001 = keithley2001
-
+        
+        # standard ranges used in all measurements
+        self.reference_level_range = self.conf.get('reference_level_range')
+        if not self.reference_level_range:
+            print("Missing reference_level_range YAML configuration.")
+            sys.exit(0)
+        self.least_sensitive_level_range = self.conf.get('least_sensitive_level_range')
+        if not self.least_sensitive_level_range:
+            print("Missing least_sensitive_level_range YAML configuration.")
+            sys.exit(0)
+        self.level_ranges = self.conf.get('level_ranges')
+        if not self.level_ranges:
+            print("Missing level_ranges YAML configuration.")
+            sys.exit(0)
+                
     def reset_instruments(self, el100=0.0):
         """Called before and after every measurement.
         """
@@ -58,7 +73,7 @@ class TimeWeighting60651(BaseMeasurement):
         SEE BS7580
         """                   
         self.reset_instruments()
-        target_slm = self.conf.get('linear_operating_range').get("max") - 4.0
+        target_slm = max(self.linear_operating_range) - 4.0
                     
         """ FAST """
         wtitle = "Time Weighting (Fast)"
@@ -188,10 +203,9 @@ class Linearity60651(BaseMeasurement):
         """
         wtitle = "Linearity (61672-3 Electrical Tests Par.14, 15)"
         self.reset_instruments(el100=3.0)
-        linear_operating_range = self.conf.get('linear_operating_range')
-        ref_range_lower = linear_operating_range.get('min')
+        ref_range_lower = min(self.linear_operating_range)
         ref_point_linearity_check = 94 # FIXED value
-        ref_range_upper = linear_operating_range.get('max')      
+        ref_range_upper = max(self.linear_operating_range)
         target_slm = ref_range_upper
         
         range_upper = range(ref_point_linearity_check, int(ref_range_upper) - 4, 5) + \
@@ -258,8 +272,7 @@ class Linearity60651(BaseMeasurement):
                   row[0], row[1], row[2], row[3], row[4], row[5]))
         
         # Proceed only if there are many level ranges
-        level_ranges = self.conf.get('level_ranges')
-        if len(level_ranges) <= 1:
+        if len(self.level_ranges) <= 1:
             print("Linearity check complete.")
             self.reset_instruments()
             return
@@ -319,65 +332,70 @@ class Linearity60651(BaseMeasurement):
         # We skip the first level range (reference) because we have already
         # checked it before in the linearity process.
         print("Other Ranges Linearity Test")
-        for lrange in level_ranges[1:]:
+        for lrange in self.level_ranges:
+            lrange_min = min(lrange)
+            lrange_max = max(lrange)
+            # Skip reference level range because we have already measured that.
+            if lrange_min == min(self.reference_level_range) and lrange_max == max(self.reference_level_range):
+                continue
             # If 94 is within range.
-            if lrange[0] > 94 > lrange[1]:
-                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+            if lrange_max > 94 > lrange_min:
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange_min, lrange_max))
                 self.el100.set("01.00")
                 # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
                 # NOTE: Must keep ref_volt, ref_atten for later comparisons!
-                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange[0] - 2, wtitle)
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange_max - 2, wtitle)
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
                     ref_range_lower, ref_range_upper))
         
-                atten_dif = lrange[0] - 2 - 94  # 94 is the fixed reference value
+                atten_dif = lrange_max - 2 - 94  # 94 is the fixed reference value
                 self.el100.set(ref_atten + atten_dif)
                 self.wgenerator.turn_on()
                 wait("Please tune the attenuator manually to achieve SLM 94 dB.")
                 at1 = self.el100.get_attenuation()
                 
-                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange_min, lrange_max))
                 wait("Please tune the attenuator manually to achieve SLM 94 dB")
                 at2 = self.el100.get_attenuation()
-                upper_target = lrange[0] - 2
+                upper_target = lrange_max - 2
                 self.el100.set(at2 - (upper_target - 94))
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
                 at3 = self.el100.get_attenuation()
-                lower_target = lrange[1] + 2
+                lower_target = lrange_min + 2
                 self.el100.set(at2 + (94 - lower_target))
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
                 at4 = self.el100.get_attenuation()
             # If 94 is outside range (e.g. range is [90,20]
             else:
-                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange_min, lrange_max))
                 self.el100.set("01.00")
                 # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
                 # NOTE: Must keep ref_volt, ref_atten for later comparisons!
-                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange[0] - 2, wtitle)
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange_max - 2, wtitle)
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
                     ref_range_lower, ref_range_upper))
         
-                atten_dif = 94 - (lrange[0] - 2)  # 94 is the fixed reference value
+                atten_dif = 94 - (lrange_max - 2)  # 94 is the fixed reference value
                 self.el100.set(ref_atten - atten_dif)
                 self.wgenerator.turn_on()
                 wait("Please tune the attenuator manually to achieve SLM 94 dB.")
                 at1 = self.el100.get_attenuation()
                 
-                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))          
+                wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange_min, lrange_max))          
                 at2 = 0.0  # not used - we don't do anything about it.                                
-                upper_target = lrange[0] - 2
+                upper_target = lrange_max - 2
                 atten_plus = 94 - upper_target
                 self.el100.set(ref_atten + atten_plus)
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
                 at3 = self.el100.get_attenuation()
                         
-                lower_target = lrange[1] + 2
+                lower_target = lrange_min + 2
                 atten_minus = 94 - lower_target
                 self.el100.set(ref_atten + atten_minus)
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
                 at4 = self.el100.get_attenuation()
                                                        
-            _print_level(upper=lrange[0], lower=lrange[1], at1=at1, at2=at2,
+            _print_level(upper=lrange_max, lower=lrange_min, at1=at1, at2=at2,
                          at3=at3, at4=at4, dvm_rdg=ref_volt)              
         
         self.reset_instruments()       
@@ -396,11 +414,10 @@ class FrequencyWeighting60651(BaseMeasurement):
         Use the same method for ISO 60651 and 61672-3.
         """
         self.reset_instruments(el100=99.00)
-        linear_operating_range = self.conf.get("linear_operating_range")
         self.wgenerator.set_frequency(1000.0, volt=0.5)
         self.wgenerator.turn_on()
         
-        spl_aim = linear_operating_range.get("max") - 45
+        spl_aim = max(self.linear_operating_range) - 45
         
         wait("Please set your SLM to A weighting and tune the attenuator until SLM value is %g." % spl_aim)
                         
@@ -443,9 +460,9 @@ class FrequencyWeighting60651(BaseMeasurement):
         frequencies = self.conf.get('frequencies')
         case_corrections = self.conf.get('case_corrections')
         windshield_corrections = self.conf.get('windshield_corrections')
-        level_ranges = self.conf.get('level_ranges')
-        upper_ref_level_range = level_ranges[0][0]
-        lower_ref_level_range = level_ranges[0][1]
+        
+        upper_ref_level_range = max(self.reference_level_range)
+        lower_ref_level_range = min(self.reference_level_range)
         for weighting in ["A", "C", "Z"]:
             wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
                 upper_ref_level_range, lower_ref_level_range, weighting))
@@ -487,9 +504,8 @@ class PeakResponse60651(BaseMeasurement):
         """TODO peak response.
         """
         wtitle = "Peak Response, ISO61670"
-        level_ranges = self.conf.get('level_ranges')
-        upper_ref_level_range = level_ranges[0][0]
-        lower_ref_level_range = level_ranges[0][1]
+        upper_ref_level_range = max(self.reference_level_range)
+        lower_ref_level_range = min(self.reference_level_range)
         weighting = "A"
         wait("Please set your Sound Level Meter REF level range (%g, %g) and %s weighting and press any key to continue." % (
              upper_ref_level_range, lower_ref_level_range, weighting), wtitle)
@@ -570,26 +586,21 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
     def __call__(self):
         # TODO run with Yiannis
         
-        # TODO page 16 of 42 The verification of SLM to BS7580
+        # NPL Technical procedure, The verification of SLM to BS7580, p16 of 42 
         # The toneburst consists of 11 cycles of a sine wave of frequency 2 kHz
         # with a repetition frequency of 40 Hz and having an RMS level which is
         # identical to that of the continuous sine wave signal.
+        wtitle = "RMS Accuracy and Overload"
         self.reset_instruments()
-        #lrange = self.conf.get('least_sensitive_level_range')
-        #upper_range = lrange[0]
-        #lower_range = lrange[1]
-        upper_range = 120
-        lower_range = 40
+        target_amplitude_indication = self.conf.get('PIR_upper_limit') - 2.0
+        ref_min = min(self.reference_level_range)
+        ref_max = max(self.reference_level_range)
+        
+        wait("Please set your SLM reference level range (%g, %g) and A weighting." % (ref_min, ref_max),
+             title=wtitle)
 
-        target_slm = upper_range - 2
-               
-        wtitle = "RMS Accuracy and Overload"                
-        wait("Please set your Sound Level Meter REF level range (%g, %g) and A weighting and press any key to continue." % (
-             upper_range, lower_range), title=wtitle)
-
-        self.el100.set(20.00) # Must start with a high value and the decrease it
-        slm_initial = upper_range - 1
-        (target_volt, atten_positive) = self._tune_wgenerator(2000, target_slm, wtitle)
+        self.el100.set(20.00) # Must start with a high value and the decrease it      
+        (target_volt, atten_positive) = self._tune_wgenerator(2000, target_amplitude_indication, wtitle)
         
         atten = atten_positive
         step = 0.5
