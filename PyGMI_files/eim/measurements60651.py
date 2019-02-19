@@ -3,7 +3,7 @@ Methods for ISO 60651 - BS 7580
 """
 import logging
 import time
-from tkutils import wait, getText
+from tkutils import wait, getText, getMultipleUserInputs
 
 
 class BaseMeasurement(object):
@@ -530,7 +530,6 @@ class TimeAveraging60651(BaseMeasurement):
         wait("Please configure your SLM to use Leq.")
         self.wgenerator.set_frequency(4000, volt=1.0)
         wait("Please configure the attenuator value so that SLM reads %g dB." % slm_target)
-        ref_attenuation = self.el100.get()
         wait("Please reset your SLM.")
                         
         # TODO test frequency of 4kHz continuous
@@ -680,16 +679,12 @@ class PulseRangeSoundExposureLevelAndOverload60651(BaseMeasurement):
         """
         wait("Please set your SLM to SEL and reset.")
         self.wgenerator.start_burst(freq=1000, volt=target_volt, delay=0, count=40)
-        res = []
-        for _ in range(3):
-            slm_val = float(getText("What is the SLM reading (dB)?", title=wtitle))
-            res.append(slm_val)
-            time.sleep(3)
-        self.wgenerator.stop_burst()
-        slm_mean = (res[0] + res[1] + res[2]) / 3.0
         
-        print("%d cycle burst applied to SLM.")
-        print("SLM readings: %g %g %g dB" % ( res[0], res[1], res[2]))
+        slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
+                                     title=wtitle, repeat=3, delay=3, type=float)
+        self.wgenerator.stop_burst()
+        print("%d cycle burst applied to SLM." % 999)
+        print("SLM readings: %g %g %g dB" % ( slms[0], slms[1], slms[2]))
         print("Nominal Reading = %g dB" % 9999)
         # TODO what is the nominal reading?
         

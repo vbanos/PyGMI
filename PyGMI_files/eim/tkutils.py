@@ -1,5 +1,6 @@
 from Tkinter import *
 import tkMessageBox
+import time
 import winsound
 
 class selectMethods60651(object):
@@ -141,12 +142,22 @@ class takeInput(object):
         self.root.bind('<Return>', self.gettext)
         self.root.mainloop()
 
-def getText(requestMessage, title=None):
+def getText(message, title=None):
     """Loop until the user makes a decision and the window is destroyed.
     """
-    msgBox = takeInput(requestMessage, title=title)
+    msgBox = takeInput(message, title=title)
     msgBox.waitForInput()
     return msgBox.getString().strip()
+
+def getMultipleUserInputs(message, title=None, repeat, delay=1.0, type=float):
+    """Make the same question multiple times and return a list of results
+    encoded in `type`.
+    """
+    results = []
+    for _ in range(repeat):
+        results.append(type(getText(message, title=title)))
+        time.sleep(delay)
+    return results
 
 
 def wait(msg, title=None):

@@ -2,8 +2,7 @@
 Methods for ISO 61672-3
 """
 import logging
-import time
-from tkutils import wait, getText
+from tkutils import wait, getText, getMultipleUserInputs
 from measurements60651 import BaseMeasurement
 
 
@@ -361,16 +360,12 @@ class AcousticTest616723(BaseMeasurement):
         wait("Please connect customer SLM and EIM reference calibrator.", title=wtitle)
         wait("Please configure the SLM to use A weighting and range %g, %g dB." % (lrange_min, lrange_max))
                 
-        res = []
-        for _ in range(3):
-            slm_val = float(getText("What is the SLM reading (dB)?",
-                                    title=wtitle))
-            res.append(slm_val)
-            time.sleep(3)
-        avg = sum(res) / 3.0
+        slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
+                                     title=wtitle, repeat=3, delay=3, type=float)
+        avg = sum(slms) / 3.0
         diff = abs(avg - corrected_spl)
         print("SLM Reading %g %g %g dB, average: %g dB, diff: %g dB" % (
-              res[0], res[1], res[2], avg, diff))
+              slms[0], slms[1], slms[2], avg, diff))
         if diff <= calibrator_conf.get('spl_tolerance'):
             print("PASS")
         else:
@@ -392,12 +387,8 @@ class SelfGeneratedNoiseTest616723(BaseMeasurement):
         weightings = ["A", "C", "Lin Wide"]
         for w in weightings:
             wait("Please use %s weighting." % w)
-            res = []
-            for _ in range(3):
-                slm_val = float(getText("What is the SLM reading (dB)?",
-                                        title=wtitle))
-                res.append(slm_val)
-                time.sleep(3)
-            mean = (res[0] + res[1] + res[2]) / 3.0
+            slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
+                                         title=wtitle, repeat=3, delay=3, type=float)
+            avg = sum(slms) / 3.0
             print("%s weighting. SLM measurements: %g    %g    %g    mean = %g (dB)" % (
-                  w, res[0], res[1], res[2], mean))
+                  w, slms[0], slms[1], slms[2], avg))
