@@ -36,12 +36,12 @@ class BaseMeasurement(object):
         self.wgenerator.turn_off()
         self.el100.set(el100)
     
-    def _tune_wgenerator(self, freq, target_slm, wtitle=None):
+    def _tune_wgenerator(self, freq, target_slm, volt=0.001, wtitle=None):
         """Tune Waveform Generator (Keysight / Agilent) voltage using a given
         frequency to achieve a target SLM measurement.
         Return voltage and attenuation values in a tuple.
         """
-        self.wgenerator.set_frequency(freq=freq, volt=0.001)
+        self.wgenerator.set_frequency(freq=freq, volt=volt)
         wait("Please tune first Waveform Generator voltage and then EL100 to achieve SLM %g dB." % target_slm,
              title=wtitle)
         volt = self.wgenerator.get_voltage()
@@ -599,17 +599,38 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         wait("Please set your SLM reference level range (%g, %g) and A weighting." % (ref_min, ref_max),
              title=wtitle)
 
-        self.el100.set(20.00) # Must start with a high value and the decrease it      
-        (target_volt, atten_positive) = self._tune_wgenerator(2000, target_amplitude_indication, wtitle)
+        self.el100.set(30.00) # Must start with a high value and the decrease it      
+        (target_volt, at1) = self._tune_wgenerator(freq=2000, volt=10, 
+                                                   target_slm=target_amplitude_indication,
+                                                   wtitle=wtitle)
+        atten = at1 - 6.6   # standard value from NPL method.
+        # aiming to have identical level between burst & continuous signals 
+        self.el100.set(atten)
         
-        atten = atten_positive
+        slms = []
+        for _ in range(3):
+            wait("Start burst.")
+            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
+            self.wgenerator.stop_burst()
+            slms.append(float(getText("What is the current SLM value?")))
+        slms_avg = sum(slms) / 3.0
+        
+        diff = target_amplitude_indication - slms_avg
+        mytype = self._slm_type_simple(diff)
+        # NPL Technical procedure, The verification of SLM to BS7580, p32 of 42. 
+        uncertainty = 0.2
+        print("Nominal SPL | Attn Setting  | Diff ref  | Uncertainty  | Class")
+        print("  (dB)             (dB)         (dB)       (dB)")
+        print(" %.2f  |  %.2f  |  %.2f  |  %.2f  |  %s" % (
+              target_amplitude_indication, atten, diff, uncertainty, mytype))
+        
+        # Test overloading
         step = 0.5
         switch_step = True
-        results = []
+        results = []       
         while(True):
             self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-            answer = getText("Do we have an overload in the Sound Level Meter? (y / n)").lower()
-            
+            answer = getText("Do we have an SLM overload? (y / n)").lower()
             if answer == "y":
                 if step == 0.5:
                     step = 0.1
@@ -622,10 +643,10 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
                         
                     atten_overload = atten
                     slm_overload = float(getText("What is the current SLM value?"))
-                    slm_diff = slm_overload - slm_initial
+                    slm_diff = slm_overload - target_amplitude_indication
                     uncertainty = 0.2
                     myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-                    results.append((slm_initial, atten_positive, slm_overload,
+                    results.append((target_amplitude_indication, at1, slm_overload,
                                     atten_overload, slm_diff, uncertainty, myclass))
                     break
                     # TODO BUG not breaking here.
@@ -634,25 +655,25 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
             self.wgenerator.stop_burst()
             self.el100.set(atten)
 
-        # reducing the signal level by 1 dB
-        atten -= 1.0
+        # reducing the signal level by 1 dB (increasing attenuation)
+        atten += 1.0
         self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
         slm_overload = float(getText("What is the current SLM value?"))
-        slm_diff = slm_overload - slm_initial
+        slm_diff = slm_overload - target_amplitude_indication
         uncertainty = 0.2
         myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-        results.append((slm_initial, atten_positive, slm_overload,
+        results.append((target_amplitude_indication, at1, slm_overload,
                         atten_overload, slm_diff, uncertainty, myclass))
         self.wgenerator.stop_burst()
         
         # reducing the signal level by a further 3 dB
-        atten -= 3
+        atten += 3
         self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
         slm_overload = float(getText("What is the current SLM value?"))
-        slm_diff = slm_overload - slm_initial
+        slm_diff = slm_overload - target_amplitude_indication
         uncertainty = 0.2
         myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-        results.append((slm_initial, atten_positive, slm_overload,
+        results.append((target_amplitude_indication, at1, slm_overload,
                         atten_overload, slm_diff, uncertainty, myclass))
         self.wgenerator.stop_burst()
 
@@ -662,6 +683,19 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
                 row[0], row[1], row[2], row[3], row[4], row[5], row[6]))       
     
         self.reset_instruments()
+     
+    def _slm_type_simple(self, diff):
+        """NPL Technical procedure, The verification of SLM to BS7580, p17 of 42 
+        Table in par.14.3
+        """
+        if abs(diff) <= 0.5:
+            return "0 & 1"
+        elif abs(diff) <= 1.0:
+            return "2"
+        elif abs(diff) <= 1.5:
+            return "3"
+        else:
+            return "ERROR! Huge difference!"
         
         
 class PulseRangeSoundExposureLevelAndOverload60651(BaseMeasurement):
