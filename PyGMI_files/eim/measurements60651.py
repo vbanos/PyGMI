@@ -24,15 +24,14 @@ class BaseMeasurement(object):
     def _tune_wgenerator(self, freq, target_slm, wtitle=None):
         """Tune Waveform Generator (Keysight / Agilent) voltage using a given
         frequency to achieve a target SLM measurement.
-        Return voltage and attenuator values in a tuple.
+        Return voltage and attenuation values in a tuple.
         """
         self.wgenerator.set_frequency(freq=freq, volt=0.001)
         wait("Please tune first Waveform Generator voltage and then EL100 to achieve SLM %g dB." % target_slm,
              title=wtitle)
         volt = self.wgenerator.get_voltage()
-        atten = self.el100.get()
         self.wgenerator.turn_off()
-        return (volt, atten)
+        return (volt, self.el100.get_attenuation())
 
     def linearity_tolerance_limits(self, deviation, uncertainty):
         """Use to define the class in Linearity measurement.
@@ -117,9 +116,8 @@ class TimeWeighting60651(BaseMeasurement):
             self.wgenerator.turn_off()
             wait("Please reset your SLM, use %s and start measurement." % method)
             self.wgenerator.start_burst(freq=freq, volt=volt, delay=delay, count=count)
-            slm_impulse_burst = float(getText("What is the SLM reading (dB)?", title=wtitle))
+            res.append(float(getText("What is the SLM reading (dB)?", title=wtitle)))
             self.wgenerator.stop_burst()
-            res.append(slm_impulse_burst)
         return res
         
     def _pass_fail(self, slm_type, diff, weighting):
@@ -212,7 +210,7 @@ class Linearity60651(BaseMeasurement):
         results = []
         for idx, slm in enumerate(range_upper):
             wait("Please tune the attenuator until SLM reads %g dB." % slm)
-            atten = self.el100.get()
+            atten = self.el100.get_attenuation()
             dif_ref_refspl = slm -  ref_point_linearity_check # TODO ???
             nom_dif = slm -  ref_point_linearity_check
             deviation = dif_ref_refspl - nom_dif
@@ -233,7 +231,7 @@ class Linearity60651(BaseMeasurement):
             
         for idx, slm in enumerate(range_lower):
             wait("Please check & tune the attenuator to make sure that SLM reads %g dB." % slm)
-            atten = self.el100.get()
+            atten = self.el100.get_attenuation()
             dif_ref_refspl = slm -  ref_point_linearity_check # TODO ???
             nom_dif = slm -  ref_point_linearity_check
             deviation = dif_ref_refspl - nom_dif
@@ -336,20 +334,19 @@ class Linearity60651(BaseMeasurement):
                 self.el100.set(ref_atten + atten_dif)
                 self.wgenerator.turn_on()
                 wait("Please tune the attenuator manually to achieve SLM 94 dB.")
-                at1 = self.el100.get()
+                at1 = self.el100.get_attenuation()
                 
                 wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
                 wait("Please tune the attenuator manually to achieve SLM 94 dB")
-                at2 = self.el100.get()
+                at2 = self.el100.get_attenuation()
                 upper_target = lrange[0] - 2
                 self.el100.set(at2 - (upper_target - 94))
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
-                at3 = self.el100.get()
-                                
+                at3 = self.el100.get_attenuation()
                 lower_target = lrange[1] + 2
                 self.el100.set(at2 + (94 - lower_target))
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
-                at4 = self.el100.get()
+                at4 = self.el100.get_attenuation()
             # If 94 is outside range (e.g. range is [90,20]
             else:
                 wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))
@@ -364,7 +361,7 @@ class Linearity60651(BaseMeasurement):
                 self.el100.set(ref_atten - atten_dif)
                 self.wgenerator.turn_on()
                 wait("Please tune the attenuator manually to achieve SLM 94 dB.")
-                at1 = self.el100.get()   
+                at1 = self.el100.get_attenuation()
                 
                 wait("Please configure SLM to A weighting at level range [%g, %g]." % (lrange[0], lrange[1]))          
                 at2 = 0.0  # not used - we don't do anything about it.                                
@@ -372,13 +369,13 @@ class Linearity60651(BaseMeasurement):
                 atten_plus = 94 - upper_target
                 self.el100.set(ref_atten + atten_plus)
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % upper_target)
-                at3 = self.el100.get()
+                at3 = self.el100.get_attenuation()
                         
                 lower_target = lrange[1] + 2
                 atten_minus = 94 - lower_target
                 self.el100.set(ref_atten + atten_minus)
                 wait("Please tune the attenuator manually to achieve SLM %g dB" % lower_target)
-                at4 = self.el100.get()
+                at4 = self.el100.get_attenuation()
                                                        
             _print_level(upper=lrange[0], lower=lrange[1], at1=at1, at2=at2,
                          at3=at3, at4=at4, dvm_rdg=ref_volt)              
@@ -388,7 +385,8 @@ class Linearity60651(BaseMeasurement):
 
 class FrequencyWeighting60651(BaseMeasurement):
     def __call__(self):
-        """Initial el100 value is not fixed. It is calculated by SLM manual values.
+        """Initial el100 attenuation value is not fixed. It is calculated by SLM
+        manual values.
         Max linearity range (e.g. 140) - 45 (fixed by standard 61672)
         We run the frequency weighting 3 times (A, C, Z).
         We do NOT change anything in our code/process, only SLM device settings
@@ -404,12 +402,12 @@ class FrequencyWeighting60651(BaseMeasurement):
         
         spl_aim = linear_operating_range.get("max") - 45
         
-        wait("Please set your Sound Level Meter to A weighting and tune the attenuator until SLM value is %g." % spl_aim)
+        wait("Please set your SLM to A weighting and tune the attenuator until SLM value is %g." % spl_aim)
                         
-        self.el100_ref_value = self.el100.get() 
+        attenuation_ref_value = self.el100.get_attenuation() 
         
         print("Waveform Generator %g Hz, %g V, attenuator %g dB, SLM %g dB" % (
-              1000.0, 0.5, self.el100_ref_value, spl_aim))
+              1000.0, 0.5, attenuation_ref_value, spl_aim))
         
         """ISO61672-1 IEC:2002, Table 2, Page 33.
         Frequency_weighting = 'A', 'C' or 'Z'
@@ -470,7 +468,7 @@ class FrequencyWeighting60651(BaseMeasurement):
                 else:
                     slm_class = 666
                 
-                row = [freq, self.el100_ref_value, slm_reading, windshield_corrections[freq],
+                row = [freq, attenuation_ref_value, slm_reading, windshield_corrections[freq],
                        case_corrections[freq], overall_response, expected, deviation, slm_class]
                 print(row)
                 results.append(row)
@@ -503,7 +501,7 @@ class PeakResponse60651(BaseMeasurement):
         self.wgenerator.turn_on()
         slm_sin = float(getText("What is the SLM reading (dB)?"))
         self.wgenerator.turn_off()
-        wait("Plase reset your SLM.")
+        wait("Please reset your SLM.")
         
         self.wgenerator.set_frequency(2000, volt, shape='RECT')
         self.wgenerator.turn_on()
@@ -526,10 +524,9 @@ class TimeAveraging60651(BaseMeasurement):
         """
         slm_type = self.conf.get('slm_type')
         self.reset_instruments(el100=99.00)
-        slm_target = 90.0
         wait("Please configure your SLM to use Leq.")
         self.wgenerator.set_frequency(4000, volt=1.0)
-        wait("Please configure the attenuator value so that SLM reads %g dB." % slm_target)
+        wait("Please configure the attenuator value so that SLM reads 90 dB.")
         wait("Please reset your SLM.")
                         
         # TODO test frequency of 4kHz continuous

@@ -58,3 +58,8 @@ class Connect_Instrument():
         raw = self.io.read_raw()
         val = "%s.%s" % (raw[0:2], raw[2:4])              
         return float(val)
+    
+    def get_attenuation(self):
+        """Älias for self.get()
+        """
+        return self.get()

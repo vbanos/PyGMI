@@ -65,7 +65,7 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
                             switch_step = False
                         
                         atten_overload = atten
-                        slm_overload = float(getText("What is the current SLM value?"))
+                        slm_overload = float(getText("What is the SLM reading (dB)?"))
                         slm_diff = slm_overload - slm_initial
                         uncertainty = 0.2
                         myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2
@@ -113,7 +113,7 @@ class FrequencyTimeWeighting616723(BaseMeasurement):
         ref_point_linearity_check = 94 # FIXED value
         self.wgenerator.set_frequency(1000.0, volt=2.0)
         wait("Please configure the attenuator value so that SLM reads %g dB." % ref_point_linearity_check)
-        ref_attenuation = self.el100.get()
+        ref_attenuation = self.el100.get_attenuation()
                         
         # FAST time weighting
         results = []
@@ -132,7 +132,7 @@ class FrequencyTimeWeighting616723(BaseMeasurement):
         # SLOW time weighting       
         results = []
         for weighting in ["A", "C", "Z"]:
-            slm = float(getText("Please set your SLM to %sS weighting and write your SLM value." % weighting))
+            slm = float(getText("Please set your SLM to %sS weighting. What is your SLM value (dB)?" % weighting))
             deviation = ref_point_linearity_check - slm
             uncertainty = 0.2
             time_weighting_class = self.linearity_tolerance_limits(deviation, uncertainty)
@@ -264,8 +264,7 @@ class PeakCSoundLevel616723(BaseMeasurement):
                                                         burst_count=1)
                 self.wgenerator.stop_burst()
                 self.wgenerator.turn_off()
-                slm_val = float(getText("What is the SLM LCpeakMax value (dB)?"))                    
-                row.append(slm_val)
+                row.append(float(getText("What is the SLM LCpeakMax value (dB)?")))
                 wait("Please reset your SLM.")
             slm_avg = (row[3] + row[4] + row[5]) / 3.0
             row.append(slm_avg)
@@ -355,10 +354,9 @@ class AcousticTest616723(BaseMeasurement):
                         calibrator_conf.get('pressure_correction')
         
         lrange = self.conf.get('linear_operating_range')
-        lrange_min = lrange.get("min")
-        lrange_max = lrange.get("max")
         wait("Please connect customer SLM and EIM reference calibrator.", title=wtitle)
-        wait("Please configure the SLM to use A weighting and range %g, %g dB." % (lrange_min, lrange_max))
+        wait("Please configure the SLM to use A weighting and range %g, %g dB." % (
+            lrange.get("min"), lrange.get("max")))
                 
         slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
                                      title=wtitle, repeat=3, delay=3, type=float)
