@@ -591,28 +591,30 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         # with a repetition frequency of 40 Hz and having an RMS level which is
         # identical to that of the continuous sine wave signal.
         wtitle = "RMS Accuracy and Overload"
-        self.reset_instruments()
+        self.reset_instruments(el100=30.00)
         target_amplitude_indication = self.conf.get('PIR_upper_limit') - 2.0
         ref_min = min(self.reference_level_range)
         ref_max = max(self.reference_level_range)
         
         wait("Please set your SLM reference level range (%g, %g) and A weighting." % (ref_min, ref_max),
-             title=wtitle)
-
-        self.el100.set(30.00) # Must start with a high value and the decrease it      
+             title=wtitle)      
         (target_volt, at1) = self._tune_wgenerator(freq=2000, volt=10, 
                                                    target_slm=target_amplitude_indication,
                                                    wtitle=wtitle)
+        atten = self.el100.get()
+        print("Attenuator Reading = %.2f dB." % atten)
         atten = at1 - 6.6   # standard value from NPL method.
-        # aiming to have identical level between burst & continuous signals 
+        print("Adjusted by 6.6 dB, i.e. %.2f dB." % atten)
+        print("Aiming to have identical level between burst & continuous signals") 
         self.el100.set(atten)
         
         slms = []
         for _ in range(3):
-            wait("Start burst.")
+            wait("Reset SLM, configure to start measurements and press OK to start burst.")
             self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
             self.wgenerator.stop_burst()
-            slms.append(float(getText("What is the current SLM value?")))
+            self.wgenerator.turn_off()
+            slms.append(float(getText("What is the LAF(max) value?")))
         slms_avg = sum(slms) / 3.0
         
         diff = target_amplitude_indication - slms_avg
@@ -626,8 +628,7 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         
         # Test overloading
         step = 0.5
-        switch_step = True
-        results = []       
+        switch_step = True      
         while(True):
             self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
             answer = getText("Do we have an SLM overload? (y / n)").lower()
@@ -641,46 +642,38 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
                         atten += 1.0
                         switch_step = False
                         
-                    atten_overload = atten
-                    slm_overload = float(getText("What is the current SLM value?"))
-                    slm_diff = slm_overload - target_amplitude_indication
-                    uncertainty = 0.2
-                    myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-                    results.append((target_amplitude_indication, at1, slm_overload,
-                                    atten_overload, slm_diff, uncertainty, myclass))
+                    slm0 = float(getText("What is the current SLM value?"))
                     break
                     # TODO BUG not breaking here.
             else:                         
                 atten -= step
             self.wgenerator.stop_burst()
+            self.wgenerator.turn_off()
             self.el100.set(atten)
+
+        print("Signal increased until SLM overload.")
+        print("SLM Reading = %.2f dB (slm0)" % slm0)
 
         # reducing the signal level by 1 dB (increasing attenuation)
         atten += 1.0
         self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-        slm_overload = float(getText("What is the current SLM value?"))
-        slm_diff = slm_overload - target_amplitude_indication
-        uncertainty = 0.2
-        myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-        results.append((target_amplitude_indication, at1, slm_overload,
-                        atten_overload, slm_diff, uncertainty, myclass))
+        slm1 = float(getText("What is the current SLM value?"))
         self.wgenerator.stop_burst()
+        self.wgenerator.turn_off()
+        print("Signal reduced by 1 dB. SLM Reading = %.2f dB (slm1)" % slm1)
         
         # reducing the signal level by a further 3 dB
-        atten += 3
+        atten += 3.0
         self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-        slm_overload = float(getText("What is the current SLM value?"))
-        slm_diff = slm_overload - target_amplitude_indication
-        uncertainty = 0.2
-        myclass = 1 if -1.8 <= slm_diff <= 1.8 else 2   # TODO change this
-        results.append((target_amplitude_indication, at1, slm_overload,
-                        atten_overload, slm_diff, uncertainty, myclass))
+        slm2 = float(getText("What is the current SLM value?"))
         self.wgenerator.stop_burst()
-
-        print("initial SLM | atten | overload SLM | atten | diff SLM | uncertainty | class")
-        for row in results:
-            print("   %.2f     %.2f      %.2f      %.2f       %.2f       %.2f       %d" % (
-                row[0], row[1], row[2], row[3], row[4], row[5], row[6]))       
+        self.wgenerator.turn_off()
+        print("Signal reduced by 3 dB. SLM Reading = %.2f dB (slm2)" % slm1)
+        
+        (t, myclass) = self.detect_slm_type_via_overload(slm0, slm1, slm2)
+        
+        print("slm0 = %.2f slm1 = %.2f slm2 = %.2f t = %.2f class = %s",
+              slm0, slm1, slm2, t, myclass)
     
         self.reset_instruments()
      
@@ -697,6 +690,44 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         else:
             return "ERROR! Huge difference!"
         
+    def detect_slm_type_via_overload(self, slm0, slm1, slm2):
+        """"1.t = slm1 - slm2 -3
+        where
+        slm0 = overload slm value
+        slm1 = overlaad slm value + 1 atten
+        slm2 = overload slm value + 3 atten
+        Inside PIR
+        EN 60651, Page 16, Table XIII, only for rows having 1 dB to 10 dB.
+        """
+        t = slm1 - slm2 - 3.0
+        if self.conf.get('PIR_LOWER_LIMIT') < t < self.conf.get('PIR_UPPER_LIMIT'):    
+            return (t, self.detect_tolerance_inside_pir(t))
+        else:
+            return (t, self.detect_tolerance_outside_pir(t))
+        
+    def detect_tolerance_inside_pir(self, t):
+        t = abs(t)
+        if t <= 0.4:
+            return "0 & 1"
+        elif t <= 0.6:
+            return "2"
+        elif t <= 1.0:
+            return "3"
+        else:
+            return "ERROR! Huge t value."
+    
+    def detect_tolerance_outside_pir(self, t):
+        t = abs(t)
+        if t <= 0.6:
+            return "0"
+        elif t <= 1.0:
+            return "1"
+        elif t <= 1.5:
+            return "2"
+        elif t <= 2.0:
+            return "3"
+        else:
+            return "ERROR! Huge t value."
         
 class PulseRangeSoundExposureLevelAndOverload60651(BaseMeasurement):
     def __run__(self):

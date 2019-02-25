@@ -149,7 +149,7 @@ def getText(message, title=None):
     msgBox.waitForInput()
     return msgBox.getString().strip()
 
-def getMultipleUserInputs(message, title=None, repeat, delay=1.0, type=float):
+def getMultipleUserInputs(message, title=None, repeat=1, delay=1.0, type=float):
     """Make the same question multiple times and return a list of results
     encoded in `type`.
     """
