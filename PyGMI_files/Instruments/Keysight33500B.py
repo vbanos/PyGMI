@@ -16,15 +16,14 @@ class Connect_Instrument():
         logging.info("Init Keysight 33500B %s", self.io.ask("*IDN?"))
         
     def initialize(self):
-        """commands executed when the instrument is initialized"""
+        """commands executed when the instrument is initialised"""
         self.io.write("OUTP:LOAD 50")
         self.io.write("*CLS")
         logging.info("CLS* => Clear all registers and logs")       
     
     
     def turn_on(self):
-        """Frequency 1000, Amplitude 0, volt offset 0
-        Volts unit is VPP (Volt Peak to Peak)
+        """Enable signal output.
         """
         self.io.write("OUTP 1")
         time.sleep(1)
@@ -34,16 +33,15 @@ class Connect_Instrument():
         time.sleep(1)
 
     def set_frequency(self, freq, volt=0.0, shape="SIN"):
-        logging.info("Set Agilent 33250A Frequency: %g shape: %s", freq, shape)
+        logging.info("Set Keysight 33500B Frequency: %g shape: %s", freq, shape)
         # self.io.write("FUNC:SHAP %s" % shape)
         self.io.write("APPL:%s %g, %g" % (shape, freq, volt))      
         
         # FUNCtion:SHAPe {SINusoid|SQUare|RAMP|USER} 
         
         # FUNCtion:SQUare:DCYCle {<percent>|MINimum|MAXimum} 
-
         
-    def start_burst(self, freq, volt, delay, count, shape='SIN'):
+    def start_burst(self, freq, volt, delay, count, shape='SIN', period=None):
         """Ref: Agilent 33250A manual
         Chapter 4 Remote Interface Reference, Burst Mode Commands, Page 187.
         
@@ -56,8 +54,26 @@ class Connect_Instrument():
         frequency is 2 mHz. For sine and square waveforms, frequencies above
         25 MHz are allowed only with an “infinite” burst count.
         
-        ref: http://rfmw.em.keysight.com/spdhelpfiles/33500/webhelp/US/Content/__I_SCPI/BURSt_Subsystem.htm
+        Burst Documentation:
+        http://rfmw.em.keysight.com/spdhelpfiles/33500/webhelp/US/Content/__I_SCPI/BURSt_Subsystem.htm
         """
+        
+        # NEW IMM burst
+        if period:
+            self.io.write("OUTP 0")
+            # Breaks RmsAccuracyAndOverload measurement, this function should
+            # have been already run earlier.
+            # self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))
+            self.io.write("BURS:MODE TRIG")
+            self.io.write("BURS:NCYC %d" % count)
+            self.io.write("BURS:INT:PER %g" % period)
+            self.io.write("BURS:PHAS 0")
+            self.io.write("TRIG:SOUR IMM")
+            self.io.write("BURS:STAT ON")
+            self.io.write("OUTP 1")
+            return
+        
+        # TRIGGERED BURST
         # logging.info("Generate a burst with %d cycles and %g delay" % (count, delay))
         self.io.write("OUTP 0")
         self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))

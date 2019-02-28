@@ -584,8 +584,6 @@ class TimeAveraging60651(BaseMeasurement):
 
 class RmsAccuracyAndOverload60651(BaseMeasurement):
     def __call__(self):
-        # TODO run with Yiannis
-        
         # NPL Technical procedure, The verification of SLM to BS7580, p16 of 42 
         # The toneburst consists of 11 cycles of a sine wave of frequency 2 kHz
         # with a repetition frequency of 40 Hz and having an RMS level which is
@@ -608,12 +606,20 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         print("Aiming to have identical level between burst & continuous signals") 
         self.el100.set(atten)
         
+        # We must run APP:SIN before doing the burst because it enables waveform generator output
+        # and it distorts our results. Then, we disable output and we run burst.
+        # NOTE that we need to wait 5 sec with burst activated to allow SLM to get a measurement.
+        # Then, we stop burst & output and repeat.
         slms = []
+        self.wgenerator.io.write("APPL:SIN 2000, %g VPP, 0 V" % target_volt)
+        self.wgenerator.turn_off()
         for _ in range(3):
             wait("Reset SLM, configure to start measurements and press OK to start burst.")
-            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-            self.wgenerator.stop_burst()
+            # TODO repetition frequency of 40Hz, which is 1 / 40 = 0.025sec (period)
+            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11, period=0.025)
+            time.sleep(5)
             self.wgenerator.turn_off()
+            self.wgenerator.stop_burst()
             slms.append(float(getText("What is the LAF(max) value?")))
         slms_avg = sum(slms) / 3.0
         
