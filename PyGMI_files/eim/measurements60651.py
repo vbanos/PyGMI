@@ -588,6 +588,7 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         # The toneburst consists of 11 cycles of a sine wave of frequency 2 kHz
         # with a repetition frequency of 40 Hz and having an RMS level which is
         # identical to that of the continuous sine wave signal.
+        BURST_DURATION = 1
         wtitle = "RMS Accuracy and Overload"
         self.reset_instruments(el100=30.00)
         target_amplitude_indication = self.conf.get('PIR_upper_limit') - 2.0
@@ -617,7 +618,7 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
             wait("Reset SLM, configure to start measurements and press OK to start burst.")
             # TODO repetition frequency of 40Hz, which is 1 / 40 = 0.025sec (period)
             self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11, period=0.025)
-            time.sleep(5)
+            time.sleep(BURST_DURATION)
             self.wgenerator.turn_off()
             self.wgenerator.stop_burst()
             slms.append(float(getText("What is the LAF(max) value?")))
@@ -634,46 +635,52 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
         
         # Test overloading
         step = 0.5
-        switch_step = True      
         while(True):
-            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
+            wait("SLM Overload testing. Please reset your SLM and press OK. Pay attention to SLM screen for overload indications.")
+            self.wgenerator.io.write("APPL:SIN 2000, %g VPP, 0 V" % target_volt)
+            self.wgenerator.turn_off()
+            self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11, period=0.025)
+            time.sleep(BURST_DURATION)
+            self.wgenerator.turn_off()
+            self.wgenerator.stop_burst()
             answer = getText("Do we have an SLM overload? (y / n)").lower()
             if answer == "y":
                 if step == 0.5:
+                    atten += 1.0
+                    self.el100.set(atten)
                     step = 0.1
-                    logging.info("Switching to step 0.1")
-                elif step == 0.1:
-                    # When we switch from 0.5 to 0.1, we go back 0.5. This happens only once.
-                    if switch_step:
-                        atten += 1.0
-                        switch_step = False
-                        
-                    slm0 = float(getText("What is the current SLM value?"))
-                    break
-                    # TODO BUG not breaking here.
+                    continue
+                slm0 = float(getText("What is the current SLM value?"))
+                break
             else:                         
                 atten -= step
-            self.wgenerator.stop_burst()
-            self.wgenerator.turn_off()
             self.el100.set(atten)
 
         print("Signal increased until SLM overload.")
-        print("SLM Reading = %.2f dB (slm0)" % slm0)
+        print("SLM Reading = %.2f dB (slm0), attenuator value: %.2f dB" % (slm0, atten))
 
         # reducing the signal level by 1 dB (increasing attenuation)
         atten += 1.0
-        self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-        slm1 = float(getText("What is the current SLM value?"))
-        self.wgenerator.stop_burst()
+        self.el100.set(atten)
+        self.wgenerator.io.write("APPL:SIN 2000, %g VPP, 0 V" % target_volt)
         self.wgenerator.turn_off()
+        self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11, period=0.025)
+        time.sleep(BURST_DURATION)
+        self.wgenerator.turn_off()
+        self.wgenerator.stop_burst()
+        slm1 = float(getText("What is the current SLM value?"))
         print("Signal reduced by 1 dB. SLM Reading = %.2f dB (slm1)" % slm1)
         
         # reducing the signal level by a further 3 dB
         atten += 3.0
-        self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11)
-        slm2 = float(getText("What is the current SLM value?"))
-        self.wgenerator.stop_burst()
+        self.el100.set(atten)
+        self.wgenerator.io.write("APPL:SIN 2000, %g VPP, 0 V" % target_volt)
         self.wgenerator.turn_off()
+        self.wgenerator.start_burst(freq=2000, volt=target_volt, delay=0, count=11, period=0.025)
+        time.sleep(BURST_DURATION)
+        self.wgenerator.turn_off()
+        self.wgenerator.stop_burst()
+        slm2 = float(getText("What is the current SLM value?"))
         print("Signal reduced by 3 dB. SLM Reading = %.2f dB (slm2)" % slm1)
         
         (t, myclass) = self.detect_slm_type_via_overload(slm0, slm1, slm2)
