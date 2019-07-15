@@ -25,12 +25,12 @@ class Connect_Instrument():
         
     def read(self):
         """Return float
+        SRS6 = 3 digits accuracy
+        FA = Frequency A
         """
-        self.io.write(".")
-        self.io.write("FA")
-        self.io.write("N")
+        self.io.write("SRS6; FA")
         result = self.io.ask("")
-        return round(float(result.replace("FA+", "")), 3)
+        return float(result.replace("FA+", ""))
     
     def read_list(self, times=1, delay=0.0):
         results = []
