@@ -23,19 +23,42 @@ class Connect_Instrument():
         """
         pass
         
+    # Reference Table 5.16, chapter 5-15. Racal operators manual
+    # NOTE that A channel X10 attenuator is turned on/off randomly when
+    # turning on/off the measured instrument.
+    CONFIG = ["AAC",
+              "AAD",
+              "AFE",
+              "AHI",
+              "APS",
+              "SLA0.0"
+              "SRS8",
+              "AAU"]
+        
     def read(self):
+        """Return float
+        SRS8 = 5 digits accuracy
+        FA = Frequency A
+        """
+        for cmd in self.CONFIG:
+            self.io.write(cmd)
+        result = self.io.ask("")
+        return float(result.replace("FA+", ""))
+    
+    def read_only(self):
         """Return float
         SRS6 = 3 digits accuracy
         FA = Frequency A
         """
-        self.io.write("SRS6; FA")
         result = self.io.ask("")
         return float(result.replace("FA+", ""))
     
     def read_list(self, times=1, delay=0.0):
+        for cmd in self.CONFIG:
+            self.io.write(cmd)
         results = []
         for _ in range(times):
-            results.append(self.read())
+            results.append(self.read_only())
             time.sleep(delay)
             print("Read Racal")
         return results
