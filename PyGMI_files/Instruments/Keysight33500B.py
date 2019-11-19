@@ -35,7 +35,16 @@ class Connect_Instrument():
     def set_frequency(self, freq, volt=0.0, shape="SIN"):
         logging.info("Set Keysight 33500B Frequency: %g shape: %s", freq, shape)
         # self.io.write("FUNC:SHAP %s" % shape)
-        self.io.write("APPL:%s %g, %g" % (shape, freq, volt))      
+        if shape == "10KSA.BARB":
+            self.io.write(r'SOUR:FUNC:ARB "INT:\%s"' % shape)
+            sample_rate = freq * 10000  # because we use sampling rate 10kSa.
+            offset = 0
+            self.io.write('SOUR:FUNC:ARB:FILTER NORMAL')    # THIS WAS AFTER THE FOLLOWING LINE
+            self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, offset))
+        else:
+            self.io.write("APPL:%s %g, %g" % (shape, freq, volt))      
+        
+        # volt unit is Vpp
         
         # FUNCtion:SHAPe {SINusoid|SQUare|RAMP|USER} 
         
@@ -57,7 +66,6 @@ class Connect_Instrument():
         Burst Documentation:
         http://rfmw.em.keysight.com/spdhelpfiles/33500/webhelp/US/Content/__I_SCPI/BURSt_Subsystem.htm
         """
-        
         # NEW IMM burst
         if period:
             self.io.write("OUTP 0")
@@ -76,15 +84,28 @@ class Connect_Instrument():
         # TRIGGERED BURST
         # logging.info("Generate a burst with %d cycles and %g delay" % (count, delay))
         self.io.write("OUTP 0")
-        self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))
+        if shape == "10KSA.BARB":
+            self.io.write(r'SOUR:FUNC:ARB "INT:\%s"' % shape)
+            sample_rate = freq * 10000  # because we use sampling rate 10kSa.
+            self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, 0))
+            self.io.write('SOUR:FUNC:ARB:FILTER NORMAL')
+            # There are 3 filter options
+            # Normal filter: a wide, flat frequency response, but its step
+            #                response exhibits overshoot and ringing
+            # Step filter: a nearly ideal step response, but with more roll-off
+            #              in its frequency response than the Normal filter
+            # Off: output changes abruptly between points, with a transition
+            #      time of approximately 10 ns.
+        else:
+            self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))
         self.io.write("BURS:MODE TRIG")
         self.io.write("TRIG:SOUR EXT")
         self.io.write("BURS:NCYC %d" % count)  # number of cycles from excel
         # Useful only for INTERNAL TRIGGER, WE USE EXTERNAL 
         #self.io.write("BURS:INT:PER %g" % period) # unit is seconds! 200ms, 2ms, 0.25ms
         self.io.write("TRIG:DEL %g" % delay)
-        self.io.write("OUTP 1")
         self.io.write("BURS:STAT ON")
+        self.io.write("OUTP 1")
         
     def stop_burst(self):
         time.sleep(2)
@@ -92,18 +113,21 @@ class Connect_Instrument():
         time.sleep(1)
         
     def positive_half_cycle(self, freq, volt, burst_count=None):
-        """Used Agilent Waveform editor to create POSRECT 8Khz, 0.1V and send it
-        to the Agilent 33250A generator. If not available, you must send it again.
-        file: Half_rectify.csv
+        """Use Agilent Waveform editor to create 10kSaPos.barb and send it
+        to KEYSIGHT 33500B generator. If not available, you must send it again.
+        Note that we use sample rate = 10 kSa, so we must multiply freq * 10000.
+        Higher sampling rate makes better results.
+        Method syntax:
+            SOUR:APPL:ARB sample_rate, amplitude, offset
         """
         self.io.write("OUTP 0")           
-        self.io.write('SOUR:FUNC:ARB "INT:\POSRECT.BARB"')
-        sample_rate = freq * 1000
-        self.io.write('SOUR:APPL:ARB %d, %d, 0' % (sample_rate, volt))
+        self.io.write(r'SOUR:FUNC:ARB "INT:\10KSAPOS.BARB"')
+        sample_rate = freq * 10000
+        self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, 0))
         if burst_count:
             self.io.write("BURS:MODE TRIG")
             self.io.write("TRIG:SOUR EXT")
-            self.io.write("BURS:NCYC %d" % burst_count)  # number of cycles from excel
+            self.io.write("BURS:NCYC %d" % burst_count)
             self.io.write("TRIG:DEL 0")
             self.io.write("OUTP 1")
             self.io.write("BURS:STAT ON")
@@ -111,46 +135,23 @@ class Connect_Instrument():
             self.io.write("OUTP 1")
         
     def negative_half_cycle(self, freq, volt, burst_count=None):
-        """Half_rectify_negative_vbanos.wvf.
-        
-        SOUR:FUNC:ARB NEGRECT.BARB
-        SOUR:FUNC:ARB INT:\MYARB.BARB
-        -121 Invalid character in number
-        
-        SOUR:FUNC:ARB "INT:\MYARB.BARB"
-        
-        NO ERROR
-        SOUR:FUNC:ARB "INT:\MYARB.BARB"
-        SOUR:APPL:ARB 1000, 1, 0
-        
-        The previous POSRECT / NEGRECT do not work properly in Keysight 33500
-        
-        We must construct new functions.
-        
-        The sample rate must be 1000 so as to have freq = sample rate.
-        
+        """See positive_half_cycle comment. Function is: 10kSaNeg.barb
         http://rfmw.em.keysight.com/spdhelpfiles/33500/webhelp/US/Content/_Home_Page/Command_Quick_Reference.htm
-        
         Keysight 33500 manual page 136
         The frequency at which points are read is the "sample rate," and the
         waveform frequency equals the sample rate divided by the number of points
         in the waveform. For example, suppose a waveform has 40 points and the
         sample rate is 10 MHz. The frequency would be (10 MHz)/40 = 250 kHz and
-        its period would be 4 µs.
-        
-        We use 1000 points for POSRECT and REGRECT, the freq would be:
-        freq = sample_rate / 1000 (points)
-        
+        its period would be 4 µs.        
         """
         self.io.write("OUTP 0")
-        self.io.write('SOUR:FUNC:ARB "INT:\NEGRECT.BARB"')
-        sample_rate = freq * 1000
-        self.io.write('SOUR:APPL:ARB %d, %d, 0' % (sample_rate, volt))
-        
+        self.io.write(r'SOUR:FUNC:ARB "INT:\10KSANEG.BARB"')
+        sample_rate = freq * 10000
+        self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, 0))
         if burst_count:
             self.io.write("BURS:MODE TRIG")
             self.io.write("TRIG:SOUR EXT")
-            self.io.write("BURS:NCYC %d" % burst_count)  # number of cycles from excel
+            self.io.write("BURS:NCYC %d" % burst_count)
             self.io.write("TRIG:DEL 0")
             self.io.write("OUTP 1")
             self.io.write("BURS:STAT ON")
@@ -163,5 +164,4 @@ class Connect_Instrument():
         
     def get_voltage(self):
         self.io.write("VOLT?")
-        return float(self.io.read().strip())
-        
+        return float(self.io.read().strip())   
