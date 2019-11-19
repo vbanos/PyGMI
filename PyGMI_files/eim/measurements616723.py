@@ -39,8 +39,8 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         
         wtitle = "Overload Indication (61672-3 Electrical Tests Par.18)" 
         # The ranges come from the first of the level_ranges conf.
-        upper_range = max(self.level_ranges[0])
-        lower_range = min(self.level_ranges[0])
+        upper_range = max(self.least_sensitive_level_range)
+        lower_range = min(self.least_sensitive_level_range)
         
         weighting = "A"
         wait("Please set your Sound Level Meter on the least sensitive range (%g, %g) and %s weighting and press any key to continue." % (
@@ -50,7 +50,9 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         # We need 600 Ohm for SLM calibration
         self.wgenerator.io.write("OUTP:LOAD 600")
         slm_initial = upper_range - 1
-        (target_volt, atten_positive) = self._tune_wgenerator(freq=4000, volt=0.5, target_slm=slm_initial, wtitle=wtitle)
+        (target_volt, atten_positive) = self._tune_wgenerator(
+            freq=4000, volt=0.5, target_slm=slm_initial, wtitle=wtitle, shape='10KSA.BARB'
+            )
                 
         def _measure():    
             atten = atten_positive
@@ -312,7 +314,6 @@ class PeakCSoundLevel616723(BaseMeasurement):
         
         # Steady 500Hz tuning and reference
         # Fix because was changed to STEP for some unknown reason.
-        self.wgenerator.io.write('SOUR:FUNC:ARB:FILTER NORMAL')
         (target_volt, target_atten) = self._tune_wgenerator(
             freq=500, volt=0.5, target_slm=target_slm, wtitle=wtitle, shape='10KSA.BARB'
             )

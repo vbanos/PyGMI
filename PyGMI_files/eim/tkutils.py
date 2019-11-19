@@ -42,7 +42,7 @@ class selectMethods60651(object):
         chk6.pack()
         self.pulse_range_sound_exposure_level_and_overload = BooleanVar()
         chk7 = Checkbutton(self.root, text="Pulse Range Sound Exposure Level & Overload (Subclauses 5.5.10, 5.5.11 and 5.5.12 of BS 7580: Part 1).",
-                           variable=self.time_averaging)
+                           variable=self.pulse_range_sound_exposure_level_and_overload)
         chk7.pack()
                 
         b = Button(self.root,text='OK',command=self.get_selection)

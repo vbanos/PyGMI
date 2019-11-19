@@ -24,6 +24,14 @@ class Script(threading.Thread):
     def run(self):
         """General configuration is loaded from C:\acoustics-configuration\general.yaml 
         """
+        # DEBUG VBANOS 2019-07-15
+        # self.racaldana = self.mainapp.instr_2      # GBIP0::14
+        # rd_values = self.racaldana.read_list(times=10, delay=0.95)  # very slow to respond
+        # print(rd_values)
+        # import sys
+        # sys.exit(0)
+        # END DEBUG
+        
         self.start_datetime = datetime.now()
         with open('C:/acoustics-configuration/general.yaml', 'r') as stream:
             self.GENERAL_CONF = yaml.load(stream)     
@@ -164,13 +172,7 @@ class Script(threading.Thread):
         and customer device. The final output is a dict with all measurements.
         """               
         self.waveform_generator.turn_off()
-       
-        # Read Total Harmonic Distortion (THD) from Krohn Hite.
-        kh_list1 = self.kh6880A.read(times=10, delay=0.99)
-
-        kh_avg1 = sum(kh_list1) / len(kh_list1)
-        print("AVG DISTORTION", kh_list1)
-    
+                   
         # check Keithley2001 DC & CURR stability/fluctuation. MA o/p (V) is vmic 
         dc_volt = self.keithley2001.scan_channel(5, "VOLT:DC", times=15, interval=0.99)
         spl_fluctuation = self.check_fluctuation(dc_volt)
@@ -189,6 +191,12 @@ class Script(threading.Thread):
             wait("Critical Error! Racal Dana value %g outside range: [%g, %g]. Terminating program." % (
                 rd_avg, freq_down, freq_up))
             sys.exit(0)
+        
+        # Read Total Harmonic Distortion (THD) from Krohn Hite.
+        kh_list1 = self.kh6880A.read(times=10, delay=0.99)
+
+        kh_avg1 = sum(kh_list1) / len(kh_list1)
+        print("AVG DISTORTION", kh_list1)
         
         wait("Stop %s, press any key to continue..." % device_name)
         if device_name == "Customer Device":

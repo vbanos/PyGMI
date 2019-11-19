@@ -124,6 +124,7 @@ class Connect_Instrument():
         self.io.write(r'SOUR:FUNC:ARB "INT:\10KSAPOS.BARB"')
         sample_rate = freq * 10000
         self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, 0))
+        self.io.write('SOUR:FUNC:ARB:FILTER NORMAL')
         if burst_count:
             self.io.write("BURS:MODE TRIG")
             self.io.write("TRIG:SOUR EXT")
@@ -148,6 +149,7 @@ class Connect_Instrument():
         self.io.write(r'SOUR:FUNC:ARB "INT:\10KSANEG.BARB"')
         sample_rate = freq * 10000
         self.io.write('SOUR:APPL:ARB %d, %g, %d' % (sample_rate, volt, 0))
+        self.io.write('SOUR:FUNC:ARB:FILTER NORMAL')
         if burst_count:
             self.io.write("BURS:MODE TRIG")
             self.io.write("TRIG:SOUR EXT")

@@ -65,6 +65,7 @@ class Script(threading.Thread):
         options.waitForInput()
         
         if options.acoustic_test.get():
+            # TODO it does not work!!
             self.acoustic_test()
         if options.self_generated_noise_test.get():
             self.self_generated_noise_test()
