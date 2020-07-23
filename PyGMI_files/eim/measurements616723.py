@@ -83,6 +83,7 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         self.wgenerator.positive_half_cycle(freq=4000, volt=target_volt/2.0)
         all_results = []
         row = _measure()
+        first_row = row
         all_results.append(row)
         print("Level @ overload indication (positive half cycle")
         self._print([row])
@@ -93,6 +94,8 @@ class OverloadIndicationMeasurement616723(BaseMeasurement):
         row = _measure()
         all_results.append(row)
         self.wgenerator.turn_off()
+        print("Level @ overload indication (positive half cycle")
+        self._print([first_row])
         print("Level @ overload indication (negative half cycle")
         self._print([row])
         self.reset_instruments()
@@ -164,7 +167,7 @@ class FrequencyTimeWeighting616723(BaseMeasurement):
 
 
 class ToneburstResponse616723(BaseMeasurement):
-    def __init__(self):
+    def __call__(self):
         """ISO61672-3 Electrical Tests Par. 16      
         Continuous setting = LAF
         Fast setting = LAF MAX
