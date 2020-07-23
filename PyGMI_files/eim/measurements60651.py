@@ -29,6 +29,12 @@ class BaseMeasurement(object):
         if not self.level_ranges:
             print("Missing level_ranges YAML configuration.")
             sys.exit(0)
+        # Load linear_operating_range if available.
+        # Note that conf value is like {"min": 40, "max": 120}
+        val = self.conf.get('linear_operating_range')
+        if val:
+            self.linear_operating_range = val.values()
+        
                 
     def reset_instruments(self, el100=0.0):
         """Called before and after every measurement.
@@ -36,12 +42,12 @@ class BaseMeasurement(object):
         self.wgenerator.turn_off()
         self.el100.set(el100)
     
-    def _tune_wgenerator(self, freq, target_slm, volt=0.001, wtitle=None):
+    def _tune_wgenerator(self, freq, target_slm, volt=0.001, wtitle=None, shape='SIN'):
         """Tune Waveform Generator (Keysight / Agilent) voltage using a given
         frequency to achieve a target SLM measurement.
         Return voltage and attenuation values in a tuple.
         """
-        self.wgenerator.set_frequency(freq=freq, volt=volt)
+        self.wgenerator.set_frequency(freq=freq, volt=volt, shape=shape)
         wait("Please tune first Waveform Generator voltage and then EL100 to achieve SLM %g dB." % target_slm,
              title=wtitle)
         volt = self.wgenerator.get_voltage()
@@ -501,7 +507,8 @@ class FrequencyWeighting60651(BaseMeasurement):
 
 class PeakResponse60651(BaseMeasurement):
     def __call__(self):
-        """TODO peak response.
+        """Required for Type 0 SLMs, optional for all the rest.
+        ALL SLMs we have are Type 1+.
         """
         wtitle = "Peak Response, ISO61670"
         upper_ref_level_range = max(self.reference_level_range)
@@ -743,8 +750,12 @@ class RmsAccuracyAndOverload60651(BaseMeasurement):
             return "ERROR! Huge t value."
         
 class PulseRangeSoundExposureLevelAndOverload60651(BaseMeasurement):
-    def __run__(self):
-        """Continuous level set up to 50dB
+    def __call__(self):
+        """NOTE we use 2 waveform generators for this measurement.
+        Keysight 33500B sends a burst of 4Khz, duration=10ms.
+        Other generators sends a continuous 1500Hz  low level signal.
+        
+        Continuous level set up to 50dB
         50 dB not attenable therefore set up to 50.1 dB
         Attenuator reading = 58.55
         Channel 1 reconnect and adjusted to read 108 dB
@@ -752,32 +763,88 @@ class PulseRangeSoundExposureLevelAndOverload60651(BaseMeasurement):
         SLM reading after 10s = 78.2 78.2 78.2 dB
         Nominal Reading = 78 dB
         """
+        pulse_range = self.conf.get('pulse_range')
+        linearity_range = self.conf.get('linearity_range')
+        
         wtitle = "Pulse Range Sound Exposure Level & Overload (Subclauses 5.5.10, 5.5.11 and 5.5.12 of BS 7580: Part 1)."
-        target_slm = 50
-        (target_volt, target_atten) = self._tune_wgenerator(1000, target_slm, wtitle)
-        # TODO what reconnect & adjusted means?
-        # TODO 
+        wait("Please set up circuit diagram 3", title=wtitle)
+        # TODO ???
+        # atten = 53.4
+        # print("Attenuator Reading = %.2g dB", atten)
+        self.el100.set(10)
+        wait("Please enable 2nd Waveform generator (Thurlby FB) with freq = 1500Hz, Voltage = 2 VPP.",
+             title=wtitle)     
+        self.wgenerator.io.write("APPL:SIN 4000, 0.002 VPP, 0 V")
+                
+        wait("Please reset your SLM and configure to use FAST, SPL, A-WTG, on Ref Range")
         
-        """Sound exposure test
-        40 cycle burst applied to SLM. set to SEL and reset.
-        SLM reading = 87.8 87.8 87.8
-        Nominal Reading = 88 dB
+        # set El100 so the SLM indication is equal to "Ref Range Lower limit"
+        ref_lower = min(self.reference_level_range)
+        wait("Set EL100 so that SLM indication is equal to %d dB" % ref_lower)
+        atten0 = self.el100.get()
+        
         """
-        wait("Please set your SLM to SEL and reset.")
-        self.wgenerator.start_burst(freq=1000, volt=target_volt, delay=0, count=40)
+        slms = []
+        for _ in range(3):
+            self.wgenerator.turn_off()
+            wait("Please reset your SLM and configure it to record Leq for 10s. Press OK and start SLM recording at the same time.",
+                 title=wtitle)
+            # we use count=40 because in EIMSLMV.BAS line 2825 it also uses 40 and 0.2 volt. 
+            self.wgenerator.start_burst(freq=2000, volt=0.2, delay=0,
+                                        count=40, period=0.010)
+            self.wgenerator.turn_off()
+            self.wgenerator.stop_burst()
+            slm = float(getText("What is the current SLM value?", title=wtitle))
+            slms.append(slm)
+        print("SLM readings = %.2g  %.2g  %.2g dB" % (slms[0], slms[1], slms[2]))
+        nominal_slm = 88 # TODO is this always the same for all SLMs?
+        print("Nominal SLM %.2g" % nominal_slm)
         
-        slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
-                                     title=wtitle, repeat=3, delay=3, type=float)
-        self.wgenerator.stop_burst()
-        print("%d cycle burst applied to SLM." % 999)
-        print("SLM readings: %g %g %g dB" % ( slms[0], slms[1], slms[2]))
-        print("Nominal Reading = %g dB" % 9999)
-        # TODO what is the nominal reading?
+        #if linearity_range > pulse_range:
+        #    # TODO
+        #else:
+        #    # TODO
         
+        # TODO
+        wait("Sound Exposure Level (SEL) Test")  
+        # Repeat the test with SLM set to SEL.
+        """
+        # TODO
+        wait("Overload Test")
         """Overload test (Integrating Mode)
         Output level of PM5138A adjusted until overload, the decreased by 1 dB.
         Corresponding continuous reading = 120.4 dB
         4 cycle burst applied, SLM set LEQ and reset
         SLM reading after 10 s = 80.7 80.7 80.7 dB
         Nominal Reading = 80.4 dB)
+        """
+        
+        
+    def _detect_type(self):
+        """NPL Technical procedure, The verification of SLM to BS7580, p20 of 42
+        Table at 17.3.
+        """
+        # TODO
+        return "0" 
+    
+class AcousticTest60651(BaseMeasurement):
+    def __run__(self):
+        """BS7580: Part 1: 1997, 5.6 Acoustic tests.
+        Consists of
+        1. Calibration at 1Khz (can be done in 2 ways, par.5.6.1).
+        2. Measurement at 125Hz and 8Khz.
+        """
+        title = "Acoustic Test"
+        wait("Please remove the dummy transmitter and replace the microphone on the SLM.",
+             title=title)
+        
+    def _calibration(self):
+        # Calibration at 1Khz
+        # calibrate at a range from 73dB to 125dB
+        # Calibrate using 2 alt methods 
+        return
+        # NOTE At any frequency, the 3 indications recorded should repeat within 0.1dB. If not we have a problem.
+    
+    def _test125_8000(self):
+        """BS7580, Paragraph 5.6.2
         """
