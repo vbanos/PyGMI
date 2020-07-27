@@ -84,7 +84,7 @@ class TimeWeighting60651(BaseMeasurement):
         """ FAST """
         wtitle = "Time Weighting (Fast)"
         wait("Please configure your SLM to FA weighting and reference range.", title=wtitle)
-        (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(freq=2000, target_slm=target_slm, wtitle=wtitle)
         res = self._measure(method="LAF(MAX)", freq=2000, volt=target_volt,
                             delay=0, count=200, wtitle=wtitle)
         print("Time Weighting Fast Continuous SLM=%g dB, attenuator %g dB" % (
@@ -96,7 +96,7 @@ class TimeWeighting60651(BaseMeasurement):
         """ SLOW """
         wtitle = "Time Weighting (Slow)"
         wait("Please configure your SLM to SA weighting.", title=wtitle)
-        (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(freq=2000, target_slm=target_slm, wtitle=wtitle)
         res = self._measure("LAF(MAX)", freq=2000, volt=target_volt,
                             delay=0, count=500, wtitle=wtitle)        
         print("Time Weighting Slow Continuous SLM=%g dB, attenuator %g dB" % (
@@ -108,7 +108,9 @@ class TimeWeighting60651(BaseMeasurement):
         """ Impulse Single Burst - two test signals are used for this."""
         wtitle = "Time Weighting (Impulse)"
         wait("Please configure your SLM to Impulse A weighting.", title=wtitle)
-        (target_volt, target_atten) = self._tune_wgenerator(2000, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(freq=2000,
+                                                            target_slm=target_slm,
+                                                            wtitle=wtitle)
                 
         res = self._measure(method="LAF(MAX)", freq=2000, volt=target_volt,
                             delay=0, count=5, wtitle=wtitle)
@@ -225,7 +227,9 @@ class Linearity60651(BaseMeasurement):
         wait("Please configure SLM to LAF weighting at reference level range [%g, %g]." % (
              ref_range_lower, ref_range_upper))
                 
-        (target_volt, target_atten) = self._tune_wgenerator(4000, target_slm, wtitle)
+        (target_volt, target_atten) = self._tune_wgenerator(freq=4000,
+            target_slm=target_slm, wtitle=wtitle, shape='SIN')
+        
         self.wgenerator.turn_on()
         results = []
         for idx, slm in enumerate(range_upper):
@@ -245,8 +249,8 @@ class Linearity60651(BaseMeasurement):
                 # do not set the attenuator in the last iteration, move to next
                 break
             if atten < 0.0:
-                wait("ERROR! Attenuator cannot get a negative value %g. Restarting linearity testing." % atten)
-                self.linearity()
+                wait("ERROR! Attenuator cannot get a negative value %g. Exiting linearity testing." % atten)
+                sys.exit(0)
             self.el100.set(atten)
             
         for idx, slm in enumerate(range_lower):
@@ -267,8 +271,8 @@ class Linearity60651(BaseMeasurement):
                 break
             
             if atten > 99.99:
-                wait("ERROR! Attenuator cannot get a value over 99.99, %g. Restarting linearity testing." % atten)
-                self.linearity()
+                wait("ERROR! Attenuator cannot get a value over 99.99, %g. Exiting." % atten)
+                sys.exit(0)
             self.el100.set(atten)           
         print("Linearity Test")
         print("Nominal SPL  Attn Setting  Diff re RefSpl  Nom Diff  Voltage Class")
@@ -350,7 +354,7 @@ class Linearity60651(BaseMeasurement):
                 self.el100.set("01.00")
                 # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
                 # NOTE: Must keep ref_volt, ref_atten for later comparisons!
-                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange_max - 2, wtitle)
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq=freq, target_slm=lrange_max - 2, wtitle=wtitle)
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
                     ref_range_lower, ref_range_upper))
         
@@ -377,7 +381,9 @@ class Linearity60651(BaseMeasurement):
                 self.el100.set("01.00")
                 # Tune function generator and attenuator to achieve SLM value = (max upper value - 2)
                 # NOTE: Must keep ref_volt, ref_atten for later comparisons!
-                (ref_volt, ref_atten) = self._tune_wgenerator(freq, lrange_max - 2, wtitle)
+                (ref_volt, ref_atten) = self._tune_wgenerator(freq=freq,
+                                                              target_slm=lrange_max - 2,
+                                                              wtitle=wtitle)
                 wait("Please configure SLM to A weighting at reference level range [%g, %g]." % (
                     ref_range_lower, ref_range_upper))
         
@@ -518,7 +524,9 @@ class PeakResponse60651(BaseMeasurement):
              upper_ref_level_range, lower_ref_level_range, weighting), wtitle)
        
         slm_aim = upper_ref_level_range - 1.0        
-        (volt, atten) = self._tune_wgenerator(2000, slm_aim, wtitle)
+        (volt, atten) = self._tune_wgenerator(freq=2000,
+                                              target_slm=slm_aim,
+                                              wtitle=wtitle)
                 
         self.wgenerator.set_frequency(2000, volt, shape='SIN')
         self.wgenerator.turn_on()
