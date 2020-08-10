@@ -3,6 +3,7 @@ import logging
 import sys
 import time
 import visa
+from ..eim.tkutils import wait
 
 # set logging output to stdout
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -99,18 +100,20 @@ class Connect_Instrument():
         else:
             self.io.write("APPL:%s %d,%g VPP, 0 V" % (shape, freq, volt))
         self.io.write("BURS:MODE TRIG")
-        self.io.write("TRIG:SOUR EXT")
         self.io.write("BURS:NCYC %d" % count)  # number of cycles from excel
-        # Useful only for INTERNAL TRIGGER, WE USE EXTERNAL 
-        #self.io.write("BURS:INT:PER %g" % period) # unit is seconds! 200ms, 2ms, 0.25ms
-        self.io.write("TRIG:DEL %g" % delay)
+        self.io.write("TRIG:SOURCE BUS")
         self.io.write("BURS:STAT ON")
         self.io.write("OUTP 1")
+        # When output channel is on, we have a debounce spike. We need to reset
+        # the instrument after that and then execute trigger.
+        wait("Please reset the SLM and click OK to trigger.")
+        self.io.write("*TRG")
         
     def stop_burst(self):
-        time.sleep(2)
-        self.io.write("BURS:STAT OFF")
         time.sleep(1)
+        self.io.write("OUTP 0")
+        time.sleep(0.5)
+        self.io.write("BURS:STAT OFF")
         
     def positive_half_cycle(self, freq, volt, burst_count=None):
         """Use Agilent Waveform editor to create 10kSaPos.barb and send it
