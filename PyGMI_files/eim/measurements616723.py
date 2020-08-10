@@ -190,13 +190,13 @@ class ToneburstResponse616723(BaseMeasurement):
                      opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
                            dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
                            dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)]),
-                dict(setting="Slow (LAF MAX)",
-                     opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
-                           dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3)]),
-                dict(setting="LA eq (equivalent)",
-                     opts=[dict(delay=0.2, cycles=800, offset=-1, min_tolerance=-0.8, max_tolerance=0.8),
-                           dict(delay=0.002, cycles=8, offset=-18, min_tolerance=-1.8, max_tolerance=1.3),
-                           dict(delay=0.00025, cycles=1, offset=-27, min_tolerance=-3.3, max_tolerance=1.3)])]
+                dict(setting="Slow (LAS MAX)",
+                     opts=[dict(delay=0.2, cycles=800, offset=-7.4, min_tolerance=-0.8, max_tolerance=0.8),
+                           dict(delay=0.002, cycles=8, offset=-27, min_tolerance=-1.8, max_tolerance=1.3)]),
+                dict(setting="LAE Sound Exposure Level (ASEL)",
+                     opts=[dict(delay=0.2, cycles=800, offset=-7, min_tolerance=-0.8, max_tolerance=0.8),
+                           dict(delay=0.002, cycles=8, offset=-27, min_tolerance=-1.8, max_tolerance=1.3),
+                           dict(delay=0.00025, cycles=1, offset=-36, min_tolerance=-3.3, max_tolerance=1.3)])]
         
         for run in runs:
             results = []
@@ -204,7 +204,7 @@ class ToneburstResponse616723(BaseMeasurement):
                 slm_results = []
                 slm_expected = slm_aim + opt['offset']
                 for _ in range(3):
-                    wait("Please use SLM setting %s and reset instrument." % run['setting'])    
+                    wait("Please use SLM setting %s." % run['setting'])
                     self.wgenerator.start_burst(freq=4000, volt=volt,
                                                   delay=opt['delay'], count=opt['cycles'])
                     self.wgenerator.stop_burst()
@@ -399,7 +399,10 @@ class SelfGeneratedNoiseTest616723(BaseMeasurement):
         for w in weightings:
             wait("Please use %s weighting." % w)
             slms = getMultipleUserInputs(message="What is the SLM reading (dB)?",
-                                         title=wtitle, repeat=3, delay=3, type=float)
-            avg = sum(slms) / 3.0
-            print("%s weighting. SLM measurements: %g    %g    %g    mean = %g (dB)" % (
-                  w, slms[0], slms[1], slms[2], avg))
+                                         title=wtitle, repeat=10, delay=1, type=float)
+            avg = sum(slms) / 10.0
+            variance = sum([((x - avg) ** 2) for x in slms]) / 10.0
+            stddev = variance ** 0.5
+            print("%s weighting. SLM measurements: %g    %g    %g    %g    %g    %g    %g    %g    %g    %g    mean = %g stdev = %g (dB)" % (
+                  w, slms[0], slms[1], slms[2], slms[3], slms[4], slms[5],
+                  slms[6], slms[7], slms[8], slms[9], avg, stddev))
